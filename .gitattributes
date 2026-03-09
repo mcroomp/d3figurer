@@ -1,0 +1,11 @@
+# Let git auto-detect text files and normalise line endings in the object store
+* text=auto
+
+# Scripts that run in WSL/Linux must have Unix line endings
+*.sh  text eol=lf
+*.js  text eol=lf
+*.py  text eol=lf
+
+# Windows-only scripts use CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
