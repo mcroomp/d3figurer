@@ -65,7 +65,7 @@ function loadFigureCustomSvgs(figDir, previewDir) {
  * browser refresh picks up the new version without regenerating this HTML.
  */
 function buildLiveFigureHtml(name, opts) {
-  const { fontCSS = '', helpersSrc, stylesJson, flagsJson = '{}', customSvgsJson = '{}', dataJsRelPath = null, figureJsRelPath } = opts;
+  const { fontCSS = '', d3figurerHelpersSrc, helpersSrc, stylesJson, flagsJson = '{}', customSvgsJson = '{}', dataJsRelPath = null, figureJsRelPath } = opts;
   const stem = flatName(name);
 
   return `<!DOCTYPE html>
@@ -119,6 +119,7 @@ class BrowserJSDOM {
 window.require = function(id) {
   if (id === 'jsdom')                              return { JSDOM: BrowserJSDOM };
   if (id === 'd3')                                 return window.d3;
+  if (id === 'd3figurer')                          return { helpers: window.__D3FIGURER_HELPERS };
   if (id.includes('helpers'))                      return window.__HELPERS;
   if (id.includes('styles'))                       return window.__S;
   if (id.startsWith('country-flag-icons'))         return window.__FLAGS_3X2;
@@ -143,6 +144,13 @@ async function main() {
   ${dataJsRelPath ? `window.module = { exports: null };
   await loadScript('${dataJsRelPath}');
   window.__FIGURE_DATA = window.module.exports;` : '// no data.js for this figure'}
+
+  // d3figurer src/helpers.js inlined so require('d3figurer').helpers resolves.
+  {
+    const module = { exports: {} };
+${d3figurerHelpersSrc}
+    window.__D3FIGURER_HELPERS = module.exports;
+  }
 
   // helpers.js inlined at gallery-generation time so require('d3')/require('jsdom')
   // inside it resolve via the shim above.
@@ -330,6 +338,9 @@ function generateLivePreviews(srcDir, previewDir, options = {}) {
     path.join(previewDir, 'd3.min.js'),
   );
 
+  // Read d3figurer src/helpers.js once — inlined so require('d3figurer').helpers resolves
+  const d3figurerHelpersSrc = fs.readFileSync(path.join(__dirname, 'helpers.js'), 'utf8');
+
   // Read helpers.js source once — inlined into every figure page
   const helpersSrc = fs.readFileSync(path.join(srcDir, 'shared', 'helpers.js'), 'utf8');
 
@@ -354,7 +365,7 @@ function generateLivePreviews(srcDir, previewDir, options = {}) {
       : null;
 
     const figureJsRelPath = path.relative(previewDir, path.join(figDir, 'figure.js')).replace(/\\/g, '/');
-    const html = buildLiveFigureHtml(name, { fontCSS, helpersSrc, stylesJson, flagsJson, customSvgsJson, dataJsRelPath, figureJsRelPath });
+    const html = buildLiveFigureHtml(name, { fontCSS, d3figurerHelpersSrc, helpersSrc, stylesJson, flagsJson, customSvgsJson, dataJsRelPath, figureJsRelPath });
     try {
       fs.writeFileSync(path.join(previewDir, `${stem}.html`), html, 'utf8');
       entries.push({ stem, name });

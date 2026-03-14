@@ -164,3 +164,4 @@ module.exports.checkLivePreviews    = checkLivePreviews;
 module.exports.checkAllAndReport    = checkAllAndReport;
 module.exports.discoverFigures      = discoverFigures;
 module.exports.flatName             = flatName;
+module.exports.helpers              = require('./helpers');
