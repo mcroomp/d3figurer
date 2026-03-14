@@ -47,6 +47,27 @@ CHROME_LOG="$RUN_DIR/chrome.log"
 # ── Helpers ───────────────────────────────────────────────────────────────────
 is_running()      { [ -f "$PID_FILE" ]        && kill -0 "$(cat "$PID_FILE")"        2>/dev/null; }
 chrome_is_running(){ [ -f "$CHROME_PID_FILE" ] && kill -0 "$(cat "$CHROME_PID_FILE")" 2>/dev/null; }
+
+# Find any d3figurer-server process not tracked by PID_FILE.
+# Returns PIDs (newline-separated) or empty string.
+find_orphan_server() {
+  local pf_pid=""
+  [ -f "$PID_FILE" ] && pf_pid="$(cat "$PID_FILE" 2>/dev/null)"
+  # pgrep uses ERE; plain substring match is enough
+  pgrep -f "d3figurer-server.js" 2>/dev/null \
+    | grep -v "^${pf_pid}$" || true
+}
+
+# Send SIGTERM, wait up to 5s, then SIGKILL if still alive.
+kill_gracefully() {
+  local pid="$1"
+  kill -TERM "$pid" 2>/dev/null || return 0
+  for _ in $(seq 1 10); do
+    sleep 0.5
+    kill -0 "$pid" 2>/dev/null || return 0
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+}
 server_ready()    { curl -s "http://localhost:$PORT/" 2>/dev/null | grep -q '"ready":true'; }
 chrome_ready()    { curl -s "http://127.0.0.1:$CHROME_PORT/json/version" 2>/dev/null | grep -q '"Browser"'; }
 
@@ -73,6 +94,18 @@ case "$cmd" in
     if is_running; then
       echo "Already running (PID $(cat "$PID_FILE"))"
       exit 0
+    fi
+
+    # Clean up stale PID file from a crashed/killed previous run
+    if [ -f "$PID_FILE" ]; then
+      echo "Removing stale PID file (process $(cat "$PID_FILE") is gone)"
+      rm -f "$PID_FILE"
+    fi
+    # Kill any orphaned process occupying the port
+    ORPHANS="$(find_orphan_server)"
+    if [ -n "$ORPHANS" ]; then
+      echo "Killing orphaned server process(es): $ORPHANS"
+      for opid in $ORPHANS; do kill_gracefully "$opid"; done
     fi
 
     mkdir -p "$RUN_DIR"
@@ -137,14 +170,21 @@ case "$cmd" in
     ;;
 
   stop)
+    # Gracefully stop tracked server process
     if is_running; then
       curl -s -X DELETE "http://localhost:$PORT/" >/dev/null 2>&1 || true
-      sleep 1
-      kill "$(cat "$PID_FILE")" 2>/dev/null || true
+      kill_gracefully "$(cat "$PID_FILE")"
     fi
     rm -f "$PID_FILE"
+    # Also kill any orphaned server processes not tracked by the PID file
+    ORPHANS="$(find_orphan_server)"
+    if [ -n "$ORPHANS" ]; then
+      echo "Killing orphaned server process(es): $ORPHANS"
+      for opid in $ORPHANS; do kill_gracefully "$opid"; done
+    fi
+    # Stop Chrome
     if chrome_is_running; then
-      kill "$(cat "$CHROME_PID_FILE")" 2>/dev/null || true
+      kill_gracefully "$(cat "$CHROME_PID_FILE")"
     fi
     rm -f "$CHROME_PID_FILE"
     echo "Stopped"
@@ -153,11 +193,13 @@ case "$cmd" in
   restart)
     if is_running; then
       curl -s -X DELETE "http://localhost:$PORT/" >/dev/null 2>&1 || true
-      sleep 1
-      kill "$(cat "$PID_FILE")" 2>/dev/null || true
+      kill_gracefully "$(cat "$PID_FILE")"
       rm -f "$PID_FILE"
     fi
-    sleep 1
+    ORPHANS="$(find_orphan_server)"
+    if [ -n "$ORPHANS" ]; then
+      for opid in $ORPHANS; do kill_gracefully "$opid"; done
+    fi
     EXTRA="--run-dir $RUN_DIR"
     if [ -n "$SRC_DIR" ]; then EXTRA="$EXTRA --src-dir $SRC_DIR"; fi
     exec "$0" start $EXTRA

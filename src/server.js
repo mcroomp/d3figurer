@@ -22,16 +22,23 @@ function normalizePdfDates(pdfPath) {
   const FIXED_ISO = '2000-01-01T00:00:00Z';
   let buf;
   try { buf = fs.readFileSync(pdfPath); } catch (_) { return; }
+  const FIXED_CREATOR  = '(d3figurer)';
   const str     = buf.toString('binary');
   const patched = str
     .replace(/\/CreationDate\s*\([^)]*\)/g, `/CreationDate ${FIXED_PDF}`)
     .replace(/\/ModDate\s*\([^)]*\)/g,      `/ModDate ${FIXED_PDF}`)
+    .replace(/\/Creator\s*\((?:[^)\\]|\\.)*\)/g,  `/Creator ${FIXED_CREATOR}`)
+    .replace(/\/Producer\s*\((?:[^)\\]|\\.)*\)/g, `/Producer ${FIXED_CREATOR}`)
     .replace(/<xmp:CreateDate>[^<]*<\/xmp:CreateDate>/g,
              `<xmp:CreateDate>${FIXED_ISO}</xmp:CreateDate>`)
     .replace(/<xmp:ModifyDate>[^<]*<\/xmp:ModifyDate>/g,
              `<xmp:ModifyDate>${FIXED_ISO}</xmp:ModifyDate>`)
     .replace(/<xmp:MetadataDate>[^<]*<\/xmp:MetadataDate>/g,
-             `<xmp:MetadataDate>${FIXED_ISO}</xmp:MetadataDate>`);
+             `<xmp:MetadataDate>${FIXED_ISO}</xmp:MetadataDate>`)
+    .replace(/<xmp:CreatorTool>[^<]*<\/xmp:CreatorTool>/g,
+             `<xmp:CreatorTool>d3figurer</xmp:CreatorTool>`)
+    .replace(/<pdf:Producer>[^<]*<\/pdf:Producer>/g,
+             `<pdf:Producer>d3figurer</pdf:Producer>`);
   if (patched !== str) fs.writeFileSync(pdfPath, Buffer.from(patched, 'binary'));
 }
 
