@@ -15,6 +15,7 @@
 const http      = require('http');
 const path      = require('path');
 const fs        = require('fs');
+const { spawnSync } = require('child_process');
 
 // ── PDF date normalisation ─────────────────────────────────────────────────
 function normalizePdfDates(pdfPath) {
@@ -40,6 +41,26 @@ function normalizePdfDates(pdfPath) {
     .replace(/<pdf:Producer>[^<]*<\/pdf:Producer>/g,
              `<pdf:Producer>d3figurer</pdf:Producer>`);
   if (patched !== str) fs.writeFileSync(pdfPath, Buffer.from(patched, 'binary'));
+}
+
+// ── PDF reprocessing via Ghostscript ───────────────────────────────────────
+// normalizePdfDates() patches metadata strings but changes their lengths,
+// corrupting xref byte offsets. XeTeX (unlike pdflatex) cannot recover from
+// a broken xref and fails to read the bounding box ("Division by 0").
+// Solution: patch metadata first, then let Ghostscript rebuild the structure.
+// gs reads the patched Info dict from the (corrupted-but-recoverable) PDF
+// and writes a clean, XeTeX-compatible file preserving those values.
+function reprocessPdf(pdfPath) {
+  normalizePdfDates(pdfPath);
+  const tmp = pdfPath + '.tmp';
+  spawnSync('gs', [
+    '-dBATCH', '-dNOPAUSE', '-dQUIET',
+    '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.4', '-dDocumentMetadata=false',
+    `-sOutputFile=${tmp}`,
+    '-f', pdfPath,
+    '-c', '[ /Creator (d3figurer) /Producer (d3figurer) /DOCINFO pdfmark',
+  ], { timeout: 30000 });
+  fs.renameSync(tmp, pdfPath);
 }
 
 // ── Serial queue ───────────────────────────────────────────────────────────
@@ -242,7 +263,7 @@ class FigurerServer {
             printBackground: true,
             margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
           });
-          normalizePdfDates(outputPath);
+          reprocessPdf(outputPath);
         }
         res.writeHead(200); res.end(JSON.stringify({ ok: true }));
       });

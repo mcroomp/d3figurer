@@ -7,6 +7,45 @@
 
 const path = require('path');
 const fs = require('fs');
+const { spawnSync } = require('child_process');
+
+function reprocessPdf(pdfPath) {
+  // 1. Patch metadata strings in-place (may corrupt xref byte offsets).
+  const FIXED_PDF = '(D:20000101000000Z)';
+  const FIXED_ISO = '2000-01-01T00:00:00Z';
+  const FIXED_CREATOR = '(d3figurer)';
+  let buf;
+  try { buf = fs.readFileSync(pdfPath); } catch (_) { return; }
+  const str = buf.toString('binary');
+  const patched = str
+    .replace(/\/CreationDate\s*\([^)]*\)/g, `/CreationDate ${FIXED_PDF}`)
+    .replace(/\/ModDate\s*\([^)]*\)/g,      `/ModDate ${FIXED_PDF}`)
+    .replace(/\/Creator\s*\((?:[^)\\]|\\.)*\)/g,  `/Creator ${FIXED_CREATOR}`)
+    .replace(/\/Producer\s*\((?:[^)\\]|\\.)*\)/g, `/Producer ${FIXED_CREATOR}`)
+    .replace(/<xmp:CreateDate>[^<]*<\/xmp:CreateDate>/g,
+             `<xmp:CreateDate>${FIXED_ISO}</xmp:CreateDate>`)
+    .replace(/<xmp:ModifyDate>[^<]*<\/xmp:ModifyDate>/g,
+             `<xmp:ModifyDate>${FIXED_ISO}</xmp:ModifyDate>`)
+    .replace(/<xmp:MetadataDate>[^<]*<\/xmp:MetadataDate>/g,
+             `<xmp:MetadataDate>${FIXED_ISO}</xmp:MetadataDate>`)
+    .replace(/<xmp:CreatorTool>[^<]*<\/xmp:CreatorTool>/g,
+             `<xmp:CreatorTool>d3figurer</xmp:CreatorTool>`)
+    .replace(/<pdf:Producer>[^<]*<\/pdf:Producer>/g,
+             `<pdf:Producer>d3figurer</pdf:Producer>`);
+  if (patched !== str) fs.writeFileSync(pdfPath, Buffer.from(patched, 'binary'));
+
+  // 2. Ghostscript rebuilds the xref table cleanly so XeTeX can parse it,
+  //    preserving the patched Info dict from step 1.
+  const tmp = pdfPath + '.tmp';
+  spawnSync('gs', [
+    '-dBATCH', '-dNOPAUSE', '-dQUIET',
+    '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.4', '-dDocumentMetadata=false',
+    `-sOutputFile=${tmp}`,
+    '-f', pdfPath,
+    '-c', '[ /Creator (d3figurer) /Producer (d3figurer) /DOCINFO pdfmark',
+  ], { timeout: 30000 });
+  fs.renameSync(tmp, pdfPath);
+}
 
 class StandaloneRenderer {
   constructor(options = {}) {
@@ -112,6 +151,7 @@ class StandaloneRenderer {
           printBackground: true,
           margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
         });
+        reprocessPdf(outputPath);
       } else if (format === 'png') {
         await page.screenshot({
           path: outputPath,
