@@ -9,6 +9,8 @@
 # $D3FIGURER_RUN_DIR).  Everything else is resolved from NODE_PATH.
 #
 # Commands:
+#   ./server.sh install                              install node_modules + Chrome
+#   ./server.sh ensure-chrome                        verify/download Chrome only
 #   ./server.sh start   [--src-dir path] [--port N] [--run-dir path]
 #   ./server.sh stop    [--run-dir path]
 #   ./server.sh restart [--src-dir path] [--run-dir path]
@@ -78,7 +80,11 @@ case "$cmd" in
     # ── Step 1: ensure Chrome is running ──────────────────────────────────
     if ! chrome_is_running; then
       CHROME_EXE="$(find_chrome)"
-      if [ -z "$CHROME_EXE" ]; then
+      if [ ! -x "$CHROME_EXE" ]; then
+        "$0" ensure-chrome
+        CHROME_EXE="$(find_chrome)"
+      fi
+      if [ ! -x "$CHROME_EXE" ]; then
         echo "Chrome not found. Ensure NODE_PATH is set and puppeteer is installed."
         exit 1
       fi
@@ -183,9 +189,44 @@ case "$cmd" in
     [ -f "$CHROME_LOG" ] && tail -f "$CHROME_LOG" || echo "No log yet: $CHROME_LOG"
     ;;
 
+  install)
+    # Install node_modules into the d3figurer directory.
+    # Used by setup_mcp.sh when d3figurer is a cloned repo (not an npm package).
+    # Chrome is downloaded on first `start` — no need to pre-install it here.
+    echo "Installing node_modules in $FIGURER_DIR..."
+    (cd "$FIGURER_DIR" && npm install)
+    ;;
+
+  ensure-chrome)
+    # Verify Chrome is installed and executable; download via puppeteer if not.
+    # Requires NODE_PATH to point to a node_modules that contains puppeteer,
+    # OR puppeteer must be installed in $FIGURER_DIR/node_modules.
+    # Safe to call repeatedly — no-op when Chrome is already healthy.
+    CHROME_EXE="$(find_chrome)"
+    if [ -x "$CHROME_EXE" ]; then
+      echo "Chrome ok: $CHROME_EXE"
+      exit 0
+    fi
+    echo "Chrome not found or not executable — installing via puppeteer..."
+    PUPPETEER_CLI=""
+    for dir in $(echo "${NODE_PATH:-}" | tr ':' '\n') "$FIGURER_DIR/node_modules"; do
+      if [ -x "$dir/.bin/puppeteer" ]; then
+        PUPPETEER_CLI="$dir/.bin/puppeteer"
+        break
+      fi
+    done
+    if [ -z "$PUPPETEER_CLI" ]; then
+      echo "ERROR: puppeteer CLI not found. Ensure NODE_PATH is set to a node_modules with puppeteer."
+      exit 1
+    fi
+    "$PUPPETEER_CLI" browsers install chrome
+    ;;
+
   help|--help|-h)
-    echo "Usage: ./server.sh {start|stop|restart|status|log|chrome-log} [options]"
+    echo "Usage: ./server.sh <command> [options]"
     echo ""
+    echo "  install                    install node_modules + Chrome (first-time setup)"
+    echo "  ensure-chrome              verify Chrome is installed; download if missing"
     echo "  start   [--src-dir path]   start Chrome + render server"
     echo "  stop                       graceful stop (render server + Chrome)"
     echo "  restart [--src-dir path]   restart render server only (Chrome stays warm)"

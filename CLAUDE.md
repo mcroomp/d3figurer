@@ -20,7 +20,7 @@ Authoritative guidance for AI agents working on the d3figurer codebase.
 ```
 d3figurer/
 ├── package.json
-├── server.sh                Lifecycle manager (install / start / stop / status / log)
+├── server.sh                Lifecycle manager (install / ensure-chrome / start / stop / status / log)
 ├── test.sh                  Test runner (quiet by default; -v verbose; pattern filter)
 ├── mcp_server.js            MCP stdio server — JSON-RPC 2.0, no SDK dependency
 ├── mcp.sh                   Self-locating MCP launcher (sets NODE_PATH, execs mcp_server.js)
@@ -57,17 +57,19 @@ d3figurer/
 
 ### Install pattern (WSL2 / Linux)
 
-All npm packages live on the **Linux filesystem** (`~/.d3figurer-work/`), never on `/mnt/c/`. node_modules on a 9p-mounted Windows drive is ~100× slower.
+All npm packages live on the **Linux filesystem** (`~/.d3figurer/`), never on `/mnt/c/`. node_modules on a 9p-mounted Windows drive is ~100× slower.
 
 ```
-~/.d3figurer-work/d3figurer/node_modules   ← npm packages (d3, jsdom, puppeteer, …)
-~/.d3figurer-work/puppeteer/               ← Chrome binary (PUPPETEER_CACHE_DIR)
-~/.d3figurer-work/run/                     ← PID files, logs
+~/.d3figurer/node_modules   ← npm packages (d3, jsdom, puppeteer, …)  [when cloned]
+~/.cache/puppeteer/         ← Chrome binary (Puppeteer's default cache)
+~/.d3figurer/run/           ← PID files, logs
 ```
 
-`server.sh install` copies `package.json` there and runs `npm install`. Source files stay in the repo. `NODE_PATH` is injected at runtime.
+`server.sh install` runs `npm install` in the d3figurer directory. Source files stay in the repo. `NODE_PATH` is injected at runtime by `mcp.sh` or the calling script.
 
-Override work directory: `--work-dir <path>` or `D3FIGURER_WORK_DIR` env var.
+Chrome is **not** pre-downloaded during `install`. It is downloaded automatically on the first `server.sh start` (or manually via `server.sh ensure-chrome`). This means the first cold start may take longer while Puppeteer fetches Chrome.
+
+Override run directory: `--run-dir <path>` or `D3FIGURER_RUN_DIR` env var.
 
 ### Two-process Chrome architecture
 
@@ -300,7 +302,7 @@ The preview is a static HTML site deployed to GitHub Pages. No server needed.
 ./test.sh "pattern"    # filter by test name regex
 ```
 
-`NODE_PATH=$HOME/.d3figurer-work/d3figurer/node_modules` is set by `test.sh`. Unit tests need no running server.
+`NODE_PATH` is set by `test.sh` (pointing to local `node_modules` or `$D3FIGURER_WORK_DIR`). Unit tests need no running server.
 
 | File | Tests | What is covered |
 |------|------:|-----------------|
@@ -316,14 +318,17 @@ Writing new tests: use `node:test` + `node:assert/strict`, no mocha/jest. Never 
 ## Server lifecycle
 
 ```bash
-./server.sh install                       # one-time: install node_modules + Chrome
-./server.sh start --src-dir <path>        # start Chrome + render server (blocks until ready)
+./server.sh install                       # one-time: npm install (Chrome downloads on first start)
+./server.sh ensure-chrome                 # verify Chrome; download via puppeteer if missing/broken
+./server.sh start --src-dir <path>        # start Chrome + render server; auto-installs Chrome if needed
 ./server.sh stop                          # graceful stop (both processes)
 ./server.sh restart                       # restart render-server only (Chrome stays warm)
 ./server.sh status
 ./server.sh log
 ./server.sh chrome-log
 ```
+
+`start` calls `ensure-chrome` automatically before launching Chrome, so a missing or partially-downloaded binary is repaired without user intervention.
 
 Default ports: `9229` (render server), `9230` (Chrome DevTools).
 
@@ -386,15 +391,15 @@ fontStyle(svgNode) {
 ./server.sh start --src-dir /path/to/myproject/figures
 
 # 2. Render a figure to PDF
-NODE_PATH=$HOME/.d3figurer-work/d3figurer/node_modules \
+NODE_PATH=$HOME/.d3figurer/node_modules \
   node bin/d3figurer.js render architecture /path/to/myproject/archi.pdf --format pdf
 
 # 3. Check layout
-NODE_PATH=$HOME/.d3figurer-work/d3figurer/node_modules \
+NODE_PATH=$HOME/.d3figurer/node_modules \
   node bin/d3figurer.js check architecture
 
 # 4. If PDF is locked (Windows viewer open), render to /tmp first
-NODE_PATH=$HOME/.d3figurer-work/d3figurer/node_modules \
+NODE_PATH=$HOME/.d3figurer/node_modules \
   node bin/d3figurer.js render timeline /tmp/timeline.pdf --format pdf
 cp /tmp/timeline.pdf /path/to/myproject/timeline.pdf
 ```
@@ -429,5 +434,5 @@ When removing LaTeX packages that write to `.aux` (e.g. `pgfgantt`), delete `mai
 6. **Figure contract** — every `figure.js` returns an SVG string with `width="N" height="N"`.
 7. **MCP graceful degradation** — return "Server not running" text rather than throwing.
 8. **Gallery output is generated** — `gallery/output/` is in `.gitignore`; built by CI.
-9. **NODE_PATH required for CLI** — always prefix CLI calls with `NODE_PATH=$HOME/.d3figurer-work/d3figurer/node_modules`.
+9. **NODE_PATH required for CLI** — always prefix CLI calls with `NODE_PATH=$HOME/.d3figurer/node_modules`.
 10. **src-dir on `/mnt/c/` is fine** — only node_modules needs Linux FS; figure sources can live anywhere.

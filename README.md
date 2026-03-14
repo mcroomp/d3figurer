@@ -46,13 +46,13 @@ d3figurer-setup-mcp
 setup_mcp.cmd
 ```
 
-`setup_mcp.sh` / `d3figurer-setup-mcp` installs Node.js if needed, installs npm packages and Chrome, then registers `mcp.sh` with Claude Code via `claude mcp add --scope user`. Restart Claude Code after running.
+`setup_mcp.sh` / `d3figurer-setup-mcp` installs Node.js if needed, installs npm packages, then registers `mcp.sh` with Claude Code via `claude mcp add --scope user`. Chrome is downloaded automatically on first `server.sh start`. Restart Claude Code after running.
 
 ## Requirements
 
 - macOS, Linux, or WSL2 (Windows)
 - Node.js ≥ 18 — installed automatically by the setup script if missing
-- Chrome — downloaded by Puppeteer during `npm install`
+- Chrome — downloaded automatically on first `server.sh start` if missing
 
 ## Usage
 
@@ -135,8 +135,9 @@ The string is injected verbatim into the `<style>` block that Chrome renders.
 ## Server lifecycle
 
 ```bash
-./server.sh install                       # one-time: install node_modules + Chrome
-./server.sh start --src-dir <path>        # start Chrome + render server
+./server.sh install                       # one-time: install node_modules (Chrome downloads on first start)
+./server.sh ensure-chrome                 # verify Chrome is installed; download if missing or broken
+./server.sh start --src-dir <path>        # start Chrome + render server (auto-installs Chrome if needed)
 ./server.sh stop                          # graceful stop (both processes)
 ./server.sh restart                       # restart render-server only (Chrome stays warm)
 ./server.sh status                        # check running / ready
