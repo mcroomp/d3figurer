@@ -9,42 +9,54 @@ const path = require('path');
 const fs = require('fs');
 const { spawnSync } = require('child_process');
 
-function reprocessPdf(pdfPath) {
-  // 1. Patch metadata strings in-place (may corrupt xref byte offsets).
-  const FIXED_PDF = '(D:20000101000000Z)';
-  const FIXED_ISO = '2000-01-01T00:00:00Z';
-  const FIXED_CREATOR = '(d3figurer)';
-  let buf;
-  try { buf = fs.readFileSync(pdfPath); } catch (_) { return; }
-  const str = buf.toString('binary');
-  const patched = str
-    .replace(/\/CreationDate\s*\([^)]*\)/g, `/CreationDate ${FIXED_PDF}`)
-    .replace(/\/ModDate\s*\([^)]*\)/g,      `/ModDate ${FIXED_PDF}`)
-    .replace(/\/Creator\s*\((?:[^)\\]|\\.)*\)/g,  `/Creator ${FIXED_CREATOR}`)
-    .replace(/\/Producer\s*\((?:[^)\\]|\\.)*\)/g, `/Producer ${FIXED_CREATOR}`)
-    .replace(/<xmp:CreateDate>[^<]*<\/xmp:CreateDate>/g,
-             `<xmp:CreateDate>${FIXED_ISO}</xmp:CreateDate>`)
-    .replace(/<xmp:ModifyDate>[^<]*<\/xmp:ModifyDate>/g,
-             `<xmp:ModifyDate>${FIXED_ISO}</xmp:ModifyDate>`)
-    .replace(/<xmp:MetadataDate>[^<]*<\/xmp:MetadataDate>/g,
-             `<xmp:MetadataDate>${FIXED_ISO}</xmp:MetadataDate>`)
-    .replace(/<xmp:CreatorTool>[^<]*<\/xmp:CreatorTool>/g,
-             `<xmp:CreatorTool>d3figurer</xmp:CreatorTool>`)
-    .replace(/<pdf:Producer>[^<]*<\/pdf:Producer>/g,
-             `<pdf:Producer>d3figurer</pdf:Producer>`);
-  if (patched !== str) fs.writeFileSync(pdfPath, Buffer.from(patched, 'binary'));
+// ── PDF metadata normalisation ─────────────────────────────────────────────
+// All replacements pad to the original value length so no byte offsets change.
+// Called once on the GS output; the GS pdfmark (-c) already sets Info dict
+// fields so dates/creator are deterministic before this runs.
+function patchPdfMeta(s) {
+  const fix = (val, target) => target.padEnd(val.length, ' ');
+  const DATE = 'D:20000101000000Z';
+  const ISO  = '2000-01-01T00:00:00Z';
+  const NAME = 'd3figurer';
+  return s
+    // ── Info dict string values ──────────────────────────────────────────
+    .replace(/\/CreationDate(\s*)\(([^)]*)\)/g, (_, w, v) => `/CreationDate${w}(${fix(v, DATE)})`)
+    .replace(/\/ModDate(\s*)\(([^)]*)\)/g,      (_, w, v) => `/ModDate${w}(${fix(v, DATE)})`)
+    .replace(/\/Creator(\s*)\(([^)]*)\)/g,      (_, w, v) => `/Creator${w}(${fix(v, NAME)})`)
+    .replace(/\/Producer(\s*)\(([^)]*)\)/g,     (_, w, v) => `/Producer${w}(${fix(v, NAME)})`)
+    // ── XMP element text content ─────────────────────────────────────────
+    .replace(/(<xmp:CreateDate>)([^<]*)(<\/xmp:CreateDate>)/g,    (_, o, v, c) => `${o}${fix(v, ISO)}${c}`)
+    .replace(/(<xmp:ModifyDate>)([^<]*)(<\/xmp:ModifyDate>)/g,    (_, o, v, c) => `${o}${fix(v, ISO)}${c}`)
+    .replace(/(<xmp:MetadataDate>)([^<]*)(<\/xmp:MetadataDate>)/g,(_, o, v, c) => `${o}${fix(v, ISO)}${c}`)
+    .replace(/(<xmp:CreatorTool>)([^<]*)(<\/xmp:CreatorTool>)/g,  (_, o, v, c) => `${o}${fix(v, NAME)}${c}`)
+    .replace(/(<pdf:Producer>)([^<]*)(<\/pdf:Producer>)/g,        (_, o, v, c) => `${o}${fix(v, NAME)}${c}`)
+    // ── XMP attribute style ──────────────────────────────────────────────
+    .replace(/pdf:Producer='([^']*)'/g, (_, v) => `pdf:Producer='${fix(v, NAME)}'`)
+    // ── XMP DocumentID / InstanceID (UUID always 36 chars) ───────────────
+    .replace(/(xapMM|xmpMM):(DocumentID|InstanceID)='uuid:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'/g,
+      (_, ns, prop) => `${ns}:${prop}='uuid:00000000-0000-0000-0000-000000000000'`)
+    // ── /ID array in trailer (zero hex inside <>, preserve all whitespace) ─
+    .replace(/\/ID\s*\[<[0-9a-fA-F]+>\s*<[0-9a-fA-F]+>\]/g, full =>
+      full.replace(/<([0-9a-fA-F]+)>/g, (_, h) => `<${'0'.repeat(h.length)}>`));
+}
 
-  // 2. Ghostscript rebuilds the xref table cleanly so XeTeX can parse it,
-  //    preserving the patched Info dict from step 1.
+function reprocessPdf(pdfPath) {
+  // Ghostscript rewrites the Puppeteer PDF as PDF 1.4, which XeTeX requires.
+  // The pdfmark sets Info dict fields; patchPdfMeta normalises everything else
+  // afterwards using same-length replacements so the rebuilt xref stays valid.
   const tmp = pdfPath + '.tmp';
   spawnSync('gs', [
     '-dBATCH', '-dNOPAUSE', '-dQUIET',
-    '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.4', '-dDocumentMetadata=false',
+    '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.4', '-dDocumentMetadata=false', '-dCompressPages=false',
     `-sOutputFile=${tmp}`,
     '-f', pdfPath,
-    '-c', '[ /Creator (d3figurer) /Producer (d3figurer) /DOCINFO pdfmark',
+    '-c', '[ /Creator (d3figurer) /Producer (d3figurer) /CreationDate (D:20000101000000Z) /ModDate (D:20000101000000Z) /DOCINFO pdfmark',
   ], { timeout: 30000 });
   fs.renameSync(tmp, pdfPath);
+  try {
+    const raw = fs.readFileSync(pdfPath);
+    fs.writeFileSync(pdfPath, Buffer.from(patchPdfMeta(raw.toString('binary')), 'binary'));
+  } catch (_) {}
 }
 
 class StandaloneRenderer {

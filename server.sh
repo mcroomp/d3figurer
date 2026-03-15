@@ -43,6 +43,7 @@ PID_FILE="$RUN_DIR/d3figurer.pid"
 LOG_FILE="$RUN_DIR/d3figurer.log"
 CHROME_PID_FILE="$RUN_DIR/chrome.pid"
 CHROME_LOG="$RUN_DIR/chrome.log"
+ENV_FILE="$RUN_DIR/d3figurer.env"    # persists NODE_PATH + SRC_DIR across restarts
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 is_running()      { [ -f "$PID_FILE" ]        && kill -0 "$(cat "$PID_FILE")"        2>/dev/null; }
@@ -69,6 +70,13 @@ kill_gracefully() {
   kill -KILL "$pid" 2>/dev/null || true
 }
 server_ready()    { curl -s "http://localhost:$PORT/" 2>/dev/null | grep -q '"ready":true'; }
+# Wait up to 5s for the port to stop accepting connections after a kill.
+wait_port_free() {
+  for _ in $(seq 1 25); do
+    curl -s --max-time 0.2 "http://localhost:$PORT/" >/dev/null 2>&1 || return 0
+    sleep 0.2
+  done
+}
 chrome_ready()    { curl -s "http://127.0.0.1:$CHROME_PORT/json/version" 2>/dev/null | grep -q '"Browser"'; }
 
 find_chrome() {
@@ -91,6 +99,13 @@ find_chrome_above() {
 case "$cmd" in
 
   start)
+    # Restore NODE_PATH and SRC_DIR from a previous start if not supplied now.
+    if [ -f "$ENV_FILE" ]; then
+      # shellcheck source=/dev/null
+      source "$ENV_FILE"
+      export NODE_PATH
+    fi
+
     if is_running; then
       echo "Already running (PID $(cat "$PID_FILE"))"
       exit 0
@@ -101,14 +116,18 @@ case "$cmd" in
       echo "Removing stale PID file (process $(cat "$PID_FILE") is gone)"
       rm -f "$PID_FILE"
     fi
-    # Kill any orphaned process occupying the port
+    # Kill any orphaned process occupying the port, then wait for port to clear
     ORPHANS="$(find_orphan_server)"
     if [ -n "$ORPHANS" ]; then
       echo "Killing orphaned server process(es): $ORPHANS"
       for opid in $ORPHANS; do kill_gracefully "$opid"; done
+      wait_port_free
     fi
 
     mkdir -p "$RUN_DIR"
+
+    # Persist environment so restart/stop work without re-supplying args
+    { echo "NODE_PATH=${NODE_PATH:-}"; echo "SRC_DIR=${SRC_DIR:-}"; } > "$ENV_FILE"
 
     # ── Step 1: ensure Chrome is running ──────────────────────────────────
     if ! chrome_is_running; then
@@ -182,6 +201,7 @@ case "$cmd" in
       echo "Killing orphaned server process(es): $ORPHANS"
       for opid in $ORPHANS; do kill_gracefully "$opid"; done
     fi
+    wait_port_free
     # Stop Chrome
     if chrome_is_running; then
       kill_gracefully "$(cat "$CHROME_PID_FILE")"
@@ -191,6 +211,11 @@ case "$cmd" in
     ;;
 
   restart)
+    # Restore saved env so restart works without re-supplying NODE_PATH/--src-dir
+    if [ -f "$ENV_FILE" ]; then
+      source "$ENV_FILE"
+      export NODE_PATH
+    fi
     if is_running; then
       curl -s -X DELETE "http://localhost:$PORT/" >/dev/null 2>&1 || true
       kill_gracefully "$(cat "$PID_FILE")"
@@ -200,9 +225,11 @@ case "$cmd" in
     if [ -n "$ORPHANS" ]; then
       for opid in $ORPHANS; do kill_gracefully "$opid"; done
     fi
-    EXTRA="--run-dir $RUN_DIR"
-    if [ -n "$SRC_DIR" ]; then EXTRA="$EXTRA --src-dir $SRC_DIR"; fi
-    exec "$0" start $EXTRA
+    wait_port_free
+    # Build start args as an array to handle paths with spaces correctly
+    start_args=(start --run-dir "$RUN_DIR")
+    [ -n "$SRC_DIR" ] && start_args+=(--src-dir "$SRC_DIR")
+    exec "$FIGURER_DIR/server.sh" "${start_args[@]}"
     ;;
 
   status)
