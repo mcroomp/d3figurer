@@ -103,9 +103,14 @@ case "$cmd" in
   start)
     # Restore NODE_PATH and SRC_DIR from a previous start if not supplied now.
     if [ -f "$ENV_FILE" ]; then
+      _CLI_SRC_DIR="$SRC_DIR"
+      _CLI_NODE_PATH="${NODE_PATH:-}"
       # shellcheck source=/dev/null
       source "$ENV_FILE"
       export NODE_PATH
+      # CLI values take priority over saved values
+      [ -n "$_CLI_SRC_DIR" ]   && SRC_DIR="$_CLI_SRC_DIR"
+      [ -n "$_CLI_NODE_PATH" ] && NODE_PATH="$_CLI_NODE_PATH"
     fi
 
     if is_running; then
