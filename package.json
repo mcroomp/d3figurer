@@ -37,7 +37,7 @@
   "dependencies": {
     "@fontsource/montserrat": "^5.2.8",
     "country-flag-icons": "^1.6.13",
-    "d3": "^7.9.0",
+    "d3": "^6.7.0",
     "jsdom": "^25.0.1",
     "puppeteer": "^24.37.4"
   },
