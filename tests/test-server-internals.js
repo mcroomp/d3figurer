@@ -6,7 +6,7 @@ const fs       = require('fs');
 const path     = require('path');
 
 const { _internals } = require('../src/server');
-const { normalizePdfDates, makeQueue } = _internals;
+const { patchPdfMeta, makeQueue } = _internals;
 
 // ── makeQueue ─────────────────────────────────────────────────────────────
 test('makeQueue serialises concurrent tasks sequentially', async () => {
@@ -55,66 +55,67 @@ test('multiple independent queues do not interfere', async () => {
   assert.ok(log.includes('q2-a'), 'q2 task ran');
 });
 
-// ── normalizePdfDates ─────────────────────────────────────────────────────
-function makeTmpPdf(content) {
-  const p = path.join(os.tmpdir(), `d3figurer-test-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`);
-  fs.writeFileSync(p, content, 'binary');
-  return p;
-}
+// ── patchPdfMeta ──────────────────────────────────────────────────────────
+// patchPdfMeta(str) → str: all replacements pad to original value length so
+// file size is preserved. Assertions must allow trailing spaces after the
+// fixed value (e.g. "D:20000101000000Z   " when original was longer).
 
-test('normalizePdfDates rewrites /CreationDate and /ModDate', () => {
-  const tmp = makeTmpPdf("/CreationDate (D:20240115093000+01'00') /ModDate (D:20240115093000)");
-  normalizePdfDates(tmp);
-  const result = fs.readFileSync(tmp, 'binary');
-  assert.match(result, /\/CreationDate \(D:20000101000000Z\)/);
-  assert.match(result, /\/ModDate \(D:20000101000000Z\)/);
-  fs.unlinkSync(tmp);
+test('patchPdfMeta rewrites /CreationDate and /ModDate (padded to original length)', () => {
+  // D:20240115093000+01'00' = 22 chars; fixed = 17 → padded to 22
+  const input  = "/CreationDate (D:20240115093000+01'00') /ModDate (D:20240115093000+01'00')";
+  const result = patchPdfMeta(input);
+  assert.equal(result.length, input.length, 'total length must not change');
+  assert.match(result, /\/CreationDate \(D:20000101000000Z\s*\)/);
+  assert.match(result, /\/ModDate \(D:20000101000000Z\s*\)/);
 });
 
-test('normalizePdfDates rewrites XMP CreateDate', () => {
-  const tmp = makeTmpPdf('<xmp:CreateDate>2024-01-15T09:30:00+01:00</xmp:CreateDate>');
-  normalizePdfDates(tmp);
-  const result = fs.readFileSync(tmp, 'binary');
-  assert.match(result, /<xmp:CreateDate>2000-01-01T00:00:00Z<\/xmp:CreateDate>/);
-  fs.unlinkSync(tmp);
+test('patchPdfMeta rewrites /Producer with space-padding', () => {
+  const input  = '/Producer (GPL Ghostscript 10.02.1)';
+  const result = patchPdfMeta(input);
+  assert.equal(result.length, input.length, 'total length must not change');
+  assert.match(result, /\/Producer \(d3figurer\s*\)/);
 });
 
-test('normalizePdfDates rewrites XMP ModifyDate and MetadataDate', () => {
-  const tmp = makeTmpPdf(
-    '<xmp:ModifyDate>2024-06-01T12:00:00Z</xmp:ModifyDate>' +
-    '<xmp:MetadataDate>2024-06-01T12:00:00Z</xmp:MetadataDate>',
-  );
-  normalizePdfDates(tmp);
-  const result = fs.readFileSync(tmp, 'binary');
-  assert.match(result, /<xmp:ModifyDate>2000-01-01T00:00:00Z<\/xmp:ModifyDate>/);
-  assert.match(result, /<xmp:MetadataDate>2000-01-01T00:00:00Z<\/xmp:MetadataDate>/);
-  fs.unlinkSync(tmp);
+test('patchPdfMeta rewrites XMP CreateDate (padded)', () => {
+  const input  = '<xmp:CreateDate>2024-01-15T09:30:00+01:00</xmp:CreateDate>';
+  const result = patchPdfMeta(input);
+  assert.equal(result.length, input.length, 'total length must not change');
+  assert.match(result, /<xmp:CreateDate>2000-01-01T00:00:00Z\s*<\/xmp:CreateDate>/);
 });
 
-test('normalizePdfDates is idempotent', () => {
-  const tmp = makeTmpPdf("/CreationDate (D:20240115093000) /ModDate (D:20240115093000)");
-  normalizePdfDates(tmp);
-  const after1 = fs.readFileSync(tmp, 'binary');
-  normalizePdfDates(tmp);
-  const after2 = fs.readFileSync(tmp, 'binary');
-  assert.equal(after1, after2, 'Second call must produce identical output');
-  fs.unlinkSync(tmp);
+test('patchPdfMeta rewrites XMP ModifyDate and MetadataDate', () => {
+  const input  = '<xmp:ModifyDate>2024-06-01T12:00:00Z</xmp:ModifyDate>' +
+                 '<xmp:MetadataDate>2024-06-01T12:00:00+01:00</xmp:MetadataDate>';
+  const result = patchPdfMeta(input);
+  assert.equal(result.length, input.length, 'total length must not change');
+  assert.match(result, /<xmp:ModifyDate>2000-01-01T00:00:00Z\s*<\/xmp:ModifyDate>/);
+  assert.match(result, /<xmp:MetadataDate>2000-01-01T00:00:00Z\s*<\/xmp:MetadataDate>/);
 });
 
-test('normalizePdfDates does not modify file without date fields', () => {
-  const content = 'Just some PDF content without dates.';
-  const tmp = makeTmpPdf(content);
-  const statBefore = fs.statSync(tmp).mtimeMs;
-  normalizePdfDates(tmp);
-  const statAfter = fs.statSync(tmp).mtimeMs;
-  // No write should happen (mtime unchanged) — or if it does, content same
-  const result = fs.readFileSync(tmp, 'binary');
-  assert.equal(result, content);
-  fs.unlinkSync(tmp);
+test('patchPdfMeta zeroes /ID hex values in-place', () => {
+  const input  = '/ID [<C9D92581A8BB57FFEAA6DAB924F68FE6><C9D92581A8BB57FFEAA6DAB924F68FE6>]';
+  const result = patchPdfMeta(input);
+  assert.equal(result.length, input.length, 'total length must not change');
+  assert.match(result, /\/ID \[<0+><0+>\]/);
 });
 
-test('normalizePdfDates handles missing file gracefully', () => {
-  assert.doesNotThrow(() => normalizePdfDates('/nonexistent/path/file.pdf'));
+test('patchPdfMeta zeroes XMP DocumentID UUID', () => {
+  const input  = "xapMM:DocumentID='uuid:44df41af-5899-11fc-0000-c71782fafca0'";
+  const result = patchPdfMeta(input);
+  assert.equal(result.length, input.length, 'total length must not change');
+  assert.match(result, /xapMM:DocumentID='uuid:0{8}-0{4}-0{4}-0{4}-0{12}'/);
+});
+
+test('patchPdfMeta is idempotent', () => {
+  const input  = "/CreationDate (D:20240115093000+01'00') /Producer (GPL Ghostscript 10.02.1)";
+  const once   = patchPdfMeta(input);
+  const twice  = patchPdfMeta(once);
+  assert.equal(once, twice, 'second call must produce identical output');
+});
+
+test('patchPdfMeta does not alter content without recognised fields', () => {
+  const input = 'Just some PDF content without metadata fields.';
+  assert.equal(patchPdfMeta(input), input);
 });
 
 // ── FigurerServer constructor (no Puppeteer) ──────────────────────────────
@@ -230,20 +231,12 @@ test('_loadFigureModules loads category/name figures two levels deep', () => {
   }
 });
 
-test('normalizePdfDates replaces all CreationDate occurrences when multiple present', () => {
-  // A malformed or concatenated PDF that has the date string more than once
-  const tmpFile = path.join(os.tmpdir(), 'multi-date.pdf');
-  const date    = '20241215120000';
-  const content = "/CreationDate (D:" + date + "+00'00') "
-                + "/ModDate (D:" + date + "+00'00') "
-                + "/CreationDate (D:" + date + "+00'00')"; // second occurrence
-  fs.writeFileSync(tmpFile, content, 'latin1');
-  try {
-    normalizePdfDates(tmpFile);
-    const out = fs.readFileSync(tmpFile, 'latin1');
-    // original date must not appear anywhere
-    assert.ok(!out.includes(date), 'All occurrences of original date must be replaced');
-  } finally {
-    fs.unlinkSync(tmpFile);
-  }
+test('patchPdfMeta replaces all CreationDate occurrences when multiple present', () => {
+  const date   = '20241215120000';
+  const input  = "/CreationDate (D:" + date + "+00'00') "
+               + "/ModDate (D:" + date + "+00'00') "
+               + "/CreationDate (D:" + date + "+00'00')"; // second occurrence
+  const result = patchPdfMeta(input);
+  assert.equal(result.length, input.length, 'total length must not change');
+  assert.ok(!result.includes(date), 'All occurrences of original date must be replaced');
 });

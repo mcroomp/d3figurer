@@ -43,7 +43,9 @@ PID_FILE="$RUN_DIR/d3figurer.pid"
 LOG_FILE="$RUN_DIR/d3figurer.log"
 CHROME_PID_FILE="$RUN_DIR/chrome.pid"
 CHROME_LOG="$RUN_DIR/chrome.log"
-ENV_FILE="$RUN_DIR/d3figurer.env"    # persists NODE_PATH + SRC_DIR across restarts
+# ENV_FILE is fixed (not inside RUN_DIR) so `server.sh restart` finds it even
+# when D3FIGURER_RUN_DIR is not set in the calling shell.
+ENV_FILE="$HOME/.d3figurer/d3figurer.env"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 is_running()      { [ -f "$PID_FILE" ]        && kill -0 "$(cat "$PID_FILE")"        2>/dev/null; }
@@ -163,13 +165,14 @@ case "$cmd" in
       echo "Chrome already running (PID $(cat "$CHROME_PID_FILE"))."
     fi
 
-    # ── Step 2: start render server (NODE_PATH inherited from environment) ─
+    # ── Step 2: start render server ───────────────────────────────────────
     echo "Starting d3figurer render server..."
     RESOLVED_SRC_DIR=""
     if [ -n "$SRC_DIR" ]; then
       RESOLVED_SRC_DIR="$(realpath "$SRC_DIR")"
     fi
 
+    NODE_PATH="${NODE_PATH:-}" \
     CHROME_URL="http://127.0.0.1:$CHROME_PORT" \
     D3FIGURER_SRC_DIR="$RESOLVED_SRC_DIR" \
       node "$FIGURER_DIR/bin/d3figurer-server.js" "$PORT" > "$LOG_FILE" 2>&1 &

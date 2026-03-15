@@ -451,4 +451,4 @@ class FigurerServer {
 module.exports = FigurerServer;
 
 // Exported for unit testing only — not part of public API
-module.exports._internals = { normalizePdfDates, makeQueue };
+module.exports._internals = { patchPdfMeta, makeQueue };
