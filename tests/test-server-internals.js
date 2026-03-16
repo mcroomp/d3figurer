@@ -1,11 +1,9 @@
-'use strict';
-const { test } = require('node:test');
-const assert   = require('node:assert/strict');
-const os       = require('os');
-const fs       = require('fs');
-const path     = require('path');
-
-const { _internals } = require('../src/server');
+import { test }                from 'node:test';
+import assert                  from 'node:assert/strict';
+import os                      from 'os';
+import fs                      from 'fs';
+import path                    from 'path';
+import FigurerServer, { _internals } from '../src/server.js';
 const { patchPdfMeta, makeQueue } = _internals;
 
 // ── makeQueue ─────────────────────────────────────────────────────────────
@@ -119,8 +117,6 @@ test('patchPdfMeta does not alter content without recognised fields', () => {
 });
 
 // ── FigurerServer constructor (no Puppeteer) ──────────────────────────────
-const FigurerServer = require('../src/server');
-
 test('FigurerServer constructor applies default options', () => {
   const s = new FigurerServer();
   assert.equal(s.options.port, 9229);
@@ -148,9 +144,9 @@ test('FigurerServer fontCSS defaults to empty string (no font injection)', () =>
   assert.doesNotMatch(s.options.fontCSS, /Montserrat|googleapis/);
 });
 
-test('FigurerServer._loadFigureModules returns empty object when srcDir is null', () => {
+test('FigurerServer._loadFigureModules returns empty object when srcDir is null', async () => {
   const s = new FigurerServer({ srcDir: null });
-  const cache = s._loadFigureModules();
+  const cache = await s._loadFigureModules();
   assert.deepEqual(cache, {});
 });
 
@@ -158,7 +154,7 @@ test('FigurerServer._loadFigureModules returns empty object when srcDir is null'
 // figures/d3/src/ has a 'shared/' subdirectory alongside figure dirs.
 // _loadFigureModules must skip it even when it happens to contain a figure.js.
 
-test('_loadFigureModules skips the shared/ directory', () => {
+test('_loadFigureModules skips the shared/ directory', async () => {
   // Build a temp srcDir that mimics figures/d3/src/:
   //   shared/figure.js  — must be ignored
   //   ch99_test/figure.js  — must be loaded
@@ -169,12 +165,12 @@ test('_loadFigureModules skips the shared/ directory', () => {
     fs.mkdirSync(sharedDir);
     fs.mkdirSync(figDir);
     fs.writeFileSync(path.join(sharedDir, 'figure.js'),
-      "module.exports = function(){ return '<svg width=\"10\" height=\"10\"></svg>'; };");
+      "globalThis.__d3fig_figure = function(){ return '<svg width=\"10\" height=\"10\"></svg>'; };");
     fs.writeFileSync(path.join(figDir, 'figure.js'),
-      "module.exports = function(){ return '<svg width=\"10\" height=\"10\"></svg>'; };");
+      "globalThis.__d3fig_figure = function(){ return '<svg width=\"10\" height=\"10\"></svg>'; };");
 
     const s = new FigurerServer({ srcDir: tmpDir });
-    const cache = s._loadFigureModules();
+    const cache = await s._loadFigureModules();
     assert.ok(!Object.prototype.hasOwnProperty.call(cache, 'shared'),
       'shared/ must not appear in figure cache');
     assert.ok(Object.prototype.hasOwnProperty.call(cache, 'ch99_test'),
@@ -184,7 +180,7 @@ test('_loadFigureModules skips the shared/ directory', () => {
   }
 });
 
-test('_loadFigureModules skips directories without figure.js', () => {
+test('_loadFigureModules skips directories without figure.js', async () => {
   // A directory without figure.js (e.g. an assets/ or old/ folder)
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'figurer-test-'));
   try {
@@ -195,10 +191,10 @@ test('_loadFigureModules skips directories without figure.js', () => {
     // 'old' has no figure.js
     fs.writeFileSync(path.join(noFig, 'README.md'), '# old figure');
     fs.writeFileSync(path.join(hasFig, 'figure.js'),
-      "module.exports = function(){ return '<svg width=\"900\" height=\"620\"></svg>'; };");
+      "globalThis.__d3fig_figure = function(){ return '<svg width=\"900\" height=\"620\"></svg>'; };");
 
     const s = new FigurerServer({ srcDir: tmpDir });
-    const cache = s._loadFigureModules();
+    const cache = await s._loadFigureModules();
     assert.ok(!Object.prototype.hasOwnProperty.call(cache, 'old'),
       'Directory without figure.js must be skipped');
     assert.ok(Object.prototype.hasOwnProperty.call(cache, 'ch02_turing_test'),
@@ -208,7 +204,7 @@ test('_loadFigureModules skips directories without figure.js', () => {
   }
 });
 
-test('_loadFigureModules loads category/name figures two levels deep', () => {
+test('_loadFigureModules loads category/name figures two levels deep', async () => {
   // srcDir/diagram/turing_test/figure.js  → cache key 'diagram/turing_test'
   // srcDir/shared/                        → skipped
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'figurer-test-'));
@@ -218,10 +214,10 @@ test('_loadFigureModules loads category/name figures two levels deep', () => {
     fs.mkdirSync(catDir);
     fs.mkdirSync(figDir);
     fs.writeFileSync(path.join(figDir, 'figure.js'),
-      "module.exports = function(){ return '<svg width=\"800\" height=\"600\"></svg>'; };");
+      "globalThis.__d3fig_figure = function(){ return '<svg width=\"800\" height=\"600\"></svg>'; };");
 
     const s = new FigurerServer({ srcDir: tmpDir });
-    const cache = s._loadFigureModules();
+    const cache = await s._loadFigureModules();
     assert.ok(Object.prototype.hasOwnProperty.call(cache, 'diagram/turing_test'),
       'category/name key must be in cache');
     assert.ok(!Object.prototype.hasOwnProperty.call(cache, 'diagram'),

@@ -1,10 +1,9 @@
-'use strict';
-const { test }  = require('node:test');
-const assert    = require('node:assert/strict');
-const fs        = require('fs');
-const os        = require('os');
-const path      = require('path');
-const FigurerClient = require('../src/client');
+import { test }      from 'node:test';
+import assert        from 'node:assert/strict';
+import fs            from 'fs';
+import os            from 'os';
+import path          from 'path';
+import FigurerClient from '../src/client.js';
 
 // ── isServerAvailable ─────────────────────────────────────────────────────
 test('isServerAvailable returns false when nothing is running', async () => {

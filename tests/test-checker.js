@@ -1,7 +1,6 @@
-'use strict';
-const { test }   = require('node:test');
-const assert     = require('node:assert/strict');
-const { formatReport } = require('../src/checker');
+import { test }         from 'node:test';
+import assert           from 'node:assert/strict';
+import { formatReport } from '../src/checker.js';
 
 // Minimal valid result object
 const base = { textCount: 5, checkedCount: 5, overlaps: [], tooClose: [], clipped: [], boxOverflows: [], svgW: 800, svgH: 600 };

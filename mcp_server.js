@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-'use strict';
 /**
  * mcp_server.js — d3figurer MCP stdio server
  *
@@ -38,11 +37,9 @@
  *   (nothing listening → ECONNREFUSED) and communicates over stdio pipes.
  */
 
-const readline = require('readline');
-const path     = require('path');
-
-const FigurerClient  = require('./src/client');
-const { formatReport } = require('./src/checker');
+import readline          from 'readline';
+import FigurerClient     from './src/client.js';
+import { formatReport }  from './src/checker.js';
 
 const PORT   = parseInt(process.env.D3FIGURER_PORT || '9229', 10);
 const client = new FigurerClient({ port: PORT });

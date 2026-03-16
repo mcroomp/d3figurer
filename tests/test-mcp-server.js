@@ -1,10 +1,10 @@
-'use strict';
-const { test }  = require('node:test');
-const assert    = require('node:assert/strict');
-const { spawn } = require('child_process');
-const path      = require('path');
-const os        = require('os');
+import { test }          from 'node:test';
+import assert            from 'node:assert/strict';
+import { spawn }         from 'child_process';
+import path              from 'path';
+import { fileURLToPath } from 'url';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_JS = path.join(__dirname, '..', 'mcp_server.js');
 
 // Use an unused port so isServerAvailable() returns false immediately (ECONNREFUSED)
