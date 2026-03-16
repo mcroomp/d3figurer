@@ -1,4 +1,3 @@
-'use strict';
 /**
  * FigurerServer — persistent render daemon
  *
@@ -12,46 +11,35 @@
  *   POST /check     → { figure, screenshotPath?, reload? }
  */
 
-const http      = require('http');
-const path      = require('path');
-const fs        = require('fs');
-const { spawnSync } = require('child_process');
+import http          from 'http';
+import path          from 'path';
+import fs            from 'fs';
+import { spawnSync } from 'child_process';
+import { pathToFileURL } from 'url';
 
 // ── PDF metadata normalisation ─────────────────────────────────────────────
-// All replacements pad to the original value length so no byte offsets change.
-// Called once on the GS output; the GS pdfmark (-c) already sets Info dict
-// fields so dates/creator are deterministic before this runs.
 function patchPdfMeta(s) {
   const fix = (val, target) => target.padEnd(val.length, ' ');
   const DATE = 'D:20000101000000Z';
   const ISO  = '2000-01-01T00:00:00Z';
   const NAME = 'd3figurer';
   return s
-    // ── Info dict string values ──────────────────────────────────────────
     .replace(/\/CreationDate(\s*)\(([^)]*)\)/g, (_, w, v) => `/CreationDate${w}(${fix(v, DATE)})`)
     .replace(/\/ModDate(\s*)\(([^)]*)\)/g,      (_, w, v) => `/ModDate${w}(${fix(v, DATE)})`)
     .replace(/\/Creator(\s*)\(([^)]*)\)/g,      (_, w, v) => `/Creator${w}(${fix(v, NAME)})`)
     .replace(/\/Producer(\s*)\(([^)]*)\)/g,     (_, w, v) => `/Producer${w}(${fix(v, NAME)})`)
-    // ── XMP element text content ─────────────────────────────────────────
     .replace(/(<xmp:CreateDate>)([^<]*)(<\/xmp:CreateDate>)/g,    (_, o, v, c) => `${o}${fix(v, ISO)}${c}`)
     .replace(/(<xmp:ModifyDate>)([^<]*)(<\/xmp:ModifyDate>)/g,    (_, o, v, c) => `${o}${fix(v, ISO)}${c}`)
     .replace(/(<xmp:MetadataDate>)([^<]*)(<\/xmp:MetadataDate>)/g,(_, o, v, c) => `${o}${fix(v, ISO)}${c}`)
     .replace(/(<xmp:CreatorTool>)([^<]*)(<\/xmp:CreatorTool>)/g,  (_, o, v, c) => `${o}${fix(v, NAME)}${c}`)
     .replace(/(<pdf:Producer>)([^<]*)(<\/pdf:Producer>)/g,        (_, o, v, c) => `${o}${fix(v, NAME)}${c}`)
-    // ── XMP attribute style ──────────────────────────────────────────────
     .replace(/pdf:Producer='([^']*)'/g, (_, v) => `pdf:Producer='${fix(v, NAME)}'`)
-    // ── XMP DocumentID / InstanceID (UUID always 36 chars) ───────────────
     .replace(/(xapMM|xmpMM):(DocumentID|InstanceID)='uuid:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'/g,
       (_, ns, prop) => `${ns}:${prop}='uuid:00000000-0000-0000-0000-000000000000'`)
-    // ── /ID array in trailer (zero hex inside <>, preserve all whitespace) ─
     .replace(/\/ID\s*\[<[0-9a-fA-F]+>\s*<[0-9a-fA-F]+>\]/g, full =>
       full.replace(/<([0-9a-fA-F]+)>/g, (_, h) => `<${'0'.repeat(h.length)}>`));
 }
 
-// ── PDF reprocessing via Ghostscript ───────────────────────────────────────
-// Ghostscript rewrites the Puppeteer PDF as PDF 1.4, which XeTeX requires.
-// The pdfmark sets Info dict fields; patchPdfMeta normalises everything else
-// afterwards using same-length replacements so the rebuilt xref stays valid.
 function reprocessPdf(pdfPath) {
   const tmp = pdfPath + '.tmp';
   spawnSync('gs', [
@@ -69,14 +57,12 @@ function reprocessPdf(pdfPath) {
 }
 
 // ── Serial queue ───────────────────────────────────────────────────────────
-// Tasks run one at a time, in enqueue order. If a task rejects the caller
-// gets the rejection, but the queue itself continues processing.
 function makeQueue() {
   let tail = Promise.resolve();
   return fn => {
     const next = tail.then(fn);
-    tail = next.catch(() => {}); // recover so subsequent tasks still run
-    return next;                 // caller receives the real rejection
+    tail = next.catch(() => {});
+    return next;
   };
 }
 
@@ -84,8 +70,8 @@ class FigurerServer {
   constructor(options = {}) {
     this.options = {
       port:          9229,
-      srcDir:        null,   // directory containing <name>/figure.js modules
-      fontCSS:       '',     // raw CSS injected into page <style> block; empty = browser default
+      srcDir:        null,
+      fontCSS:       '',
       idleMinutes:   parseInt(process.env.IDLE_SHUTDOWN_AFTER || '10', 10),
       chromeOptions: {
         headless: 'new',
@@ -104,15 +90,23 @@ class FigurerServer {
   }
 
   // ── Figure module loading ─────────────────────────────────────────────────
-  // Recursively walks srcDir. Any directory containing a figure.js is a figure;
-  // its name is the relative path from srcDir (e.g. 'diagram/turing_test').
-  // Directories named 'shared' are skipped at any depth.
-  _loadFigureModules() {
+  async _loadFigureModules() {
     const { srcDir } = this.options;
     if (!srcDir) return {};
     const cache = {};
 
-    const walk = (dir, prefix) => {
+    // Pre-load shared deps so globalThis.d3, __d3fig_helpers, __d3fig_styles are set
+    const helpersSrc = path.join(srcDir, 'shared', 'helpers.js');
+    const stylesSrc  = path.join(srcDir, 'shared', 'styles.js');
+    if (fs.existsSync(helpersSrc)) await import(pathToFileURL(helpersSrc).href);
+    if (fs.existsSync(stylesSrc))  await import(pathToFileURL(stylesSrc).href);
+    globalThis.__d3fig_assets = {};
+    try {
+      const { default: flagsModule } = await import('country-flag-icons/string/3x2');
+      globalThis.__d3fig_assets.flags = flagsModule;
+    } catch (_) {}
+
+    const walk = async (dir, prefix) => {
       for (const entry of fs.readdirSync(dir)) {
         if (entry === 'shared') continue;
         const entryPath = path.join(dir, entry);
@@ -126,21 +120,32 @@ class FigurerServer {
             for (const f of svgFiles) {
               try { flags[path.basename(f, '.svg')] = fs.readFileSync(path.join(entryPath, f), 'utf8'); } catch (_) {}
             }
-            global.window = { __CUSTOM_FLAGS: flags };
+            globalThis.__CUSTOM_FLAGS = flags;
+          }
+          // Load data.js side effect (sets globalThis.__d3fig_data)
+          const dataPath = path.join(entryPath, 'data.js');
+          if (fs.existsSync(dataPath)) {
+            await import(pathToFileURL(dataPath).href);
           }
           try {
-            cache[name] = require(figPath);
+            globalThis.__d3fig_figure = undefined;
+            await import(pathToFileURL(figPath).href);
+            if (globalThis.__d3fig_figure) {
+              cache[name] = { fn: globalThis.__d3fig_figure, data: globalThis.__d3fig_data };
+            } else {
+              process.stderr.write(`  Warning: ${name}: __d3fig_figure not set\n`);
+            }
           } catch (e) {
             process.stderr.write(`  Warning: failed to load ${name}: ${e.message}\n`);
           }
-          if (global.window) global.window = undefined;
+          if (globalThis.__CUSTOM_FLAGS) globalThis.__CUSTOM_FLAGS = undefined;
         } else {
-          walk(entryPath, name);
+          await walk(entryPath, name);
         }
       }
     };
 
-    walk(srcDir, '');
+    await walk(srcDir, '');
     return cache;
   }
 
@@ -150,15 +155,25 @@ class FigurerServer {
       throw Object.assign(new Error(`Unknown figure: ${figure}`), { status: 404 });
     }
     if (reload && this.options.srcDir) {
-      const figPath  = path.join(this.options.srcDir, figure, 'figure.js');
-      // Clear data cache for both .js and .json variants
-      for (const dataFile of ['data.js', 'data.json']) {
-        try { delete require.cache[require.resolve(path.join(this.options.srcDir, figure, dataFile))]; } catch (_) {}
+      const t       = Date.now();
+      const figPath = path.join(this.options.srcDir, figure, 'figure.js');
+      const dataPath = path.join(this.options.srcDir, figure, 'data.js');
+      try {
+        // Reload data first
+        if (fs.existsSync(dataPath)) {
+          await import(pathToFileURL(dataPath).href + '?t=' + t);
+        }
+        // Reload figure
+        globalThis.__d3fig_figure = undefined;
+        await import(pathToFileURL(figPath).href + '?t=' + t);
+        if (!globalThis.__d3fig_figure) throw new Error('__d3fig_figure not set after reload');
+        this._figureCache[figure] = { fn: globalThis.__d3fig_figure, data: globalThis.__d3fig_data };
+      } catch (e) {
+        throw Object.assign(new Error(`Failed to reload ${figure}: ${e.message}`), { status: 500 });
       }
-      delete require.cache[require.resolve(figPath)];
-      this._figureCache[figure] = require(figPath);
     }
-    const svgHtml = this._figureCache[figure]();
+    const { fn, data } = this._figureCache[figure];
+    const svgHtml = fn({ data, S: globalThis.__d3fig_styles, d3: globalThis.d3, assets: globalThis.__d3fig_assets });
     const svgW    = parseInt((svgHtml.match(/width="(\d+)"/)  || [, 900])[1]);
     const svgH    = parseInt((svgHtml.match(/height="(\d+)"/) || [, 600])[1]);
     const html    = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${this.options.fontCSS || ''}*{margin:0;padding:0;box-sizing:border-box}body{background:white}svg{display:block}</style></head><body>${svgHtml}</body></html>`;
@@ -167,14 +182,13 @@ class FigurerServer {
     return { svgW, svgH, svgHtml };
   }
 
-  // ── start (continued below) ───────────────────────────────────────────────
   async start() {
-    const puppeteer = require('puppeteer');
+    const { default: puppeteer } = await import('puppeteer');
     const t0  = Date.now();
     const lap = label => process.stderr.write(`  ${label} (${((Date.now() - t0) / 1000).toFixed(1)}s)\n`);
     process.stderr.write('d3figurer: starting up...\n');
 
-    this._figureCache = this._loadFigureModules();
+    this._figureCache = await this._loadFigureModules();
     lap(`${Object.keys(this._figureCache).length} figure modules loaded`);
 
     const CHROME_URL = process.env.CHROME_URL || null;
@@ -198,7 +212,6 @@ class FigurerServer {
     this._page = await this._browser.newPage();
     lap('page ready');
 
-    // Idle-shutdown timer
     if (this.options.idleMinutes > 0) {
       this._idleTimer = setInterval(() => {
         if (Date.now() - this._lastActivity > this.options.idleMinutes * 60_000) {
@@ -217,15 +230,12 @@ class FigurerServer {
     return this;
   }
 
-  // ── HTTP handler ─────────────────────────────────────────────────────────
   _handleRequest(req, res) {
-    // GET / — status
     if (req.method === 'GET' && req.url === '/') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ready: true, figures: Object.keys(this._figureCache) }));
       return;
     }
-    // DELETE / — shutdown
     if (req.method === 'DELETE' && req.url === '/') {
       res.writeHead(200); res.end('shutting down\n');
       const done = this._ownsBrowser
@@ -234,7 +244,6 @@ class FigurerServer {
       done.then(() => this._server.close(() => process.exit(0)));
       return;
     }
-    // Helper: read body → parse JSON → enqueue handler
     const withBody = handler => {
       let body = '';
       req.on('data', d => { body += d; });
@@ -251,8 +260,6 @@ class FigurerServer {
         }));
       });
     };
-    // POST /render  — body: { figure, outputPath, format?, reload? }
-    // format: 'pdf' (default) | 'png' | 'svg'
     if (req.method === 'POST' && req.url === '/render') {
       withBody(async ({ figure, outputPath, format = 'pdf', reload }) => {
         this._lastActivity = Date.now();
@@ -274,9 +281,6 @@ class FigurerServer {
       });
       return;
     }
-    // POST /load-url  — body: { url, screenshotPath? }
-    // Navigates the Puppeteer page to a URL (e.g. file:///) and verifies it loads.
-    // Returns { ok, failedRequests } where failedRequests is a list of URLs that 404'd.
     if (req.method === 'POST' && req.url === '/load-url') {
       withBody(async ({ url, screenshotPath }) => {
         this._lastActivity = Date.now();
@@ -296,7 +300,6 @@ class FigurerServer {
       });
       return;
     }
-    // POST /check — DOM analysis: overlaps, too-close, clipping, box-overflow
     if (req.method === 'POST' && req.url === '/check') {
       withBody(async ({ figure, screenshotPath, reload }) => {
         this._lastActivity = Date.now();
@@ -311,10 +314,8 @@ class FigurerServer {
             })
             .filter(t => t.text && t.w > 1 && t.h > 1);
           const nodes    = allNodes.filter(t => !t.skip);
-          // Horizontal threshold is larger (~2 character spaces) so horizontally
-          // adjacent labels with barely a sliver of air are flagged as too close.
-          const MIN_GAP_X = 8;   // horizontal: ~2 character spaces at typical font size
-          const MIN_GAP_Y = 3;   // vertical
+          const MIN_GAP_X = 8;
+          const MIN_GAP_Y = 3;
           const overlaps = [], tooClose = [];
           for (let i = 0; i < nodes.length; i++) {
             for (let j = i + 1; j < nodes.length; j++) {
@@ -368,14 +369,11 @@ class FigurerServer {
                 textPos: [Math.round(t.x), Math.round(t.y)] });
             }
           }
-          // rectIntrusions — text outside a rect whose bounding box still overlaps it.
-          // boxOverflows only catches text whose centre is inside the rect; this catches
-          // labels that poke into a rect from outside (e.g. arrow labels near node boxes).
           const rectIntrusions = [];
           for (const t of allNodes) {
             const cx = t.x + t.w / 2, cy = t.y + t.h / 2;
             const isInsideAny = boxes.some(b => cx >= b.x && cx <= b.r && cy >= b.y && cy <= b.b);
-            if (isInsideAny) continue; // already handled by boxOverflows
+            if (isInsideAny) continue;
             for (const box of boxes) {
               const ox = Math.min(t.r, box.r) - Math.max(t.x, box.x);
               const oy = Math.min(t.b, box.b) - Math.max(t.y, box.y);
@@ -389,9 +387,6 @@ class FigurerServer {
               }
             }
           }
-          // data-box / data-inside — explicit containment assertions.
-          // Mark a rect with data-box="id" and a text with data-inside="id":
-          // the checker will verify the text sits fully inside that rect.
           const labelledBoxes = {};
           Array.from(document.querySelectorAll('svg rect[data-box]')).forEach(el => {
             const id = el.getAttribute('data-box');
@@ -419,7 +414,6 @@ class FigurerServer {
                 textPos: [Math.round(r.left), Math.round(r.top)] });
             }
           });
-
           return { textCount: allNodes.length, checkedCount: nodes.length,
             overlaps, tooClose, clipped, boxOverflows, rectIntrusions, outsideBox };
         }, svgW, svgH);
@@ -434,7 +428,6 @@ class FigurerServer {
     res.writeHead(404); res.end();
   }
 
-  // ── stop ──────────────────────────────────────────────────────────────────
   async stop() {
     if (this._idleTimer) { clearInterval(this._idleTimer); this._idleTimer = null; }
     if (this._server)   { await new Promise(r => this._server.close(r)); this._server = null; }
@@ -448,7 +441,7 @@ class FigurerServer {
   }
 }
 
-module.exports = FigurerServer;
+export default FigurerServer;
 
 // Exported for unit testing only — not part of public API
-module.exports._internals = { patchPdfMeta, makeQueue };
+export const _internals = { patchPdfMeta, makeQueue };

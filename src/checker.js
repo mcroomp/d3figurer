@@ -1,4 +1,3 @@
-'use strict';
 /**
  * checker.js — layout QA helpers for d3figurer
  *
@@ -13,8 +12,8 @@
  *   figureSrcDir    {string}   directory containing <figure>/figure.js (needed for watch)
  */
 
-const fs   = require('fs');
-const path = require('path');
+import fs   from 'fs';
+import path from 'path';
 
 // ── Report formatter ──────────────────────────────────────────────────────
 /**
@@ -240,4 +239,4 @@ async function checkAllAndReport(client, figures, opts = {}) {
   return { ok, total: results.length, results };
 }
 
-module.exports = { formatReport, checkAndReport, watchFigure, checkAllAndReport };
+export { formatReport, checkAndReport, watchFigure, checkAllAndReport };

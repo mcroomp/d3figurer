@@ -1,14 +1,18 @@
 #!/usr/bin/env node
-'use strict';
 
 /**
  * d3figurer CLI - Command-line interface for D3Figurer
  */
 
-const D3Figurer = require('../src/index');
-const { formatReport } = require('../src/checker');
-const path = require('path');
-const fs = require('fs');
+import D3Figurer from '../src/index.js';
+import { formatReport } from '../src/checker.js';
+import FigurerClient from '../src/client.js';
+import path from 'path';
+import fs from 'fs';
+import { pathToFileURL, fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
 
 // Parse command-line arguments
 const args = process.argv.slice(2);
@@ -42,7 +46,7 @@ Examples:
 function parseArgs(args) {
   const options = {};
   const positionals = [];
-  
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg.startsWith('--')) {
@@ -58,7 +62,7 @@ function parseArgs(args) {
       positionals.push(arg);
     }
   }
-  
+
   return { options, positionals };
 }
 
@@ -67,19 +71,19 @@ async function runServer(options) {
     port: parseInt(options.port) || 9229,
     srcDir: options.srcDir ? path.resolve(options.srcDir) : null
   });
-  
+
   console.log(`Starting server on port ${figurer.options.port}...`);
   try {
     await figurer.startServer();
     console.log('Server ready. Press Ctrl+C to stop.');
-    
+
     // Handle graceful shutdown
     process.on('SIGINT', async () => {
-      console.log('\\nShutting down server...');
+      console.log('\nShutting down server...');
       await figurer.stopServer();
       process.exit(0);
     });
-    
+
     // Keep process alive
     await new Promise(() => {});
   } catch (error) {
@@ -94,11 +98,11 @@ async function runRender(figureName, outputPath, options) {
     showUsage();
     process.exit(1);
   }
-  
+
   const figurer = new D3Figurer({
     srcDir: options.srcDir ? path.resolve(options.srcDir) : null
   });
-  
+
   try {
     await figurer.render(figureName, path.resolve(outputPath), {
       format: options.format || 'pdf'
@@ -137,11 +141,11 @@ function flatName(name) {
 const FORMATS = ['png', 'svg', 'pdf'];
 
 // Call figure.js and return its SVG string. On error returns a red placeholder SVG.
-function renderInlineSvg(srcDir, name) {
+async function renderInlineSvg(srcDir, name) {
   try {
     const figPath = path.join(srcDir, name, 'figure.js');
-    try { delete require.cache[require.resolve(figPath)]; } catch (_) {}
-    return require(figPath)();
+    const mod = await import(pathToFileURL(figPath).href + '?t=' + Date.now());
+    return mod.default();
   } catch (e) {
     return `<svg viewBox="0 0 400 80" xmlns="http://www.w3.org/2000/svg">
       <rect width="400" height="80" fill="#2a1010"/>
@@ -152,7 +156,7 @@ function renderInlineSvg(srcDir, name) {
 }
 
 // preview/<stem>.html — figure page used both as iframe source and standalone view.
-function buildFigureHtml(srcDir, name, rendered) {
+function buildFigureHtml(srcDir, name, rendered, inlineSvg) {
   const [category, ...rest] = name.split('/');
   const title = (rest.join('/') || name).replace(/_/g, ' ');
   const stem  = flatName(name);
@@ -160,7 +164,6 @@ function buildFigureHtml(srcDir, name, rendered) {
     .filter(f => rendered.has(f))
     .map(f => `<a class="dl" href="../${f}/${stem}.${f}">${f.toUpperCase()}</a>`)
     .join(' ');
-  const inlineSvg = renderInlineSvg(srcDir, name);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -359,7 +362,6 @@ async function runBatch(outputDir, figures, options) {
     process.exit(1);
   }
 
-  const FigurerClient = require('../src/client');
   const port    = parseInt(options.port) || 9229;
   const client  = new FigurerClient({ port });
   const srcDir  = options.srcDir ? path.resolve(options.srcDir) : null;
@@ -410,7 +412,8 @@ async function runBatch(outputDir, figures, options) {
   const rm = renderedMap();
   const entries = figureNames.map(name => ({ name, rendered: rm.get(name) }));
   for (const { name, rendered } of entries) {
-    fs.writeFileSync(path.join(previewPath, `${flatName(name)}.html`), buildFigureHtml(srcDir, name, rendered), 'utf8');
+    const inlineSvg = await renderInlineSvg(srcDir, name);
+    fs.writeFileSync(path.join(previewPath, `${flatName(name)}.html`), buildFigureHtml(srcDir, name, rendered, inlineSvg), 'utf8');
   }
   const indexPath = path.join(previewPath, 'index.html');
   fs.writeFileSync(indexPath, buildIndexHtml(srcDir, entries), 'utf8');
@@ -462,9 +465,9 @@ async function runStop(options) {
   const figurer = new D3Figurer({
     port: parseInt(options.port) || 9229
   });
-  
+
   const client = figurer.getClient();
-  
+
   try {
     const success = await client.shutdown();
     if (success) {
@@ -484,31 +487,31 @@ async function main() {
     showUsage();
     return;
   }
-  
+
   const { options, positionals } = parseArgs(args.slice(1));
-  
+
   try {
     switch (command) {
       case 'server':
         await runServer(options);
         break;
-        
+
       case 'render':
         await runRender(positionals[0], positionals[1], options);
         break;
-        
+
       case 'batch':
         await runBatch(positionals[0], positionals.slice(1), options);
         break;
-        
+
       case 'check':
         await runCheck(positionals[0], options);
         break;
-        
+
       case 'stop':
         await runStop(options);
         break;
-        
+
       default:
         console.error(`Unknown command: ${command}`);
         showUsage();

@@ -1,16 +1,14 @@
-'use strict';
 /**
  * Generic SVG helpers for building server-side D3 figures.
  *
- * Exported as require('d3figurer').helpers so project-level helpers.js files
- * can pull these in with one line and extend with project-specific additions:
+ * Exported as named exports from 'd3figurer' so project-level helpers.js files
+ * can pull these in and extend with project-specific additions:
  *
- *   const d3helpers = require('d3figurer').helpers;
- *   module.exports = Object.assign({}, d3helpers, { myProjectHelper });
+ *   import { makeSVG, addMarker, addIcon } from 'd3figurer';
  */
 
-const { JSDOM } = require('jsdom');
-const d3 = require('d3');
+import { JSDOM } from 'jsdom';
+import * as d3 from 'd3';
 
 /**
  * Create a D3 SVG backed by jsdom.
@@ -91,4 +89,4 @@ function addIcon(parent, pathData, cx, cy, size, fill, opacity) {
   return el;
 }
 
-module.exports = { makeSVG, addMarker, addIcon };
+export { makeSVG, addMarker, addIcon };

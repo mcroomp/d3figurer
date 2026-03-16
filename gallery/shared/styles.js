@@ -1,11 +1,9 @@
-'use strict';
-
 // Book color palette — from aibook.sty
 // Chapter red: RGB(228, 0, 59)   #e4003b
 // Chapter gray: RGB(120, 120, 120) #787878
 // Gray boxes: RGB(225, 225, 225)  #e1e1e1
 
-module.exports = {
+export default {
   RED:        '#e4003b',  // Primary book red RGB(228,0,59)
   RED_LIGHT:  '#f08090',  // Light red — projections, secondary elements
   RED_DARK:   '#b80030',  // Darker red — emphasis

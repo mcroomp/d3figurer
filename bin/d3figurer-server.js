@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-'use strict';
 
 /**
  * d3figurer-server.js — persistent render daemon entry point
@@ -17,8 +16,8 @@
  *   DELETE /        → shutdown
  */
 
-const path = require('path');
-const FigurerServer = require('../src/server');
+import path from 'path';
+import FigurerServer from '../src/server.js';
 
 const PORT   = parseInt(process.argv[2] || process.env.D3FIGURER_PORT || '9229', 10);
 const SRC_DIR = process.env.D3FIGURER_SRC_DIR || null;

@@ -1,4 +1,3 @@
-'use strict';
 /**
  * FigurerClient — HTTP client for FigurerServer
  *
@@ -14,10 +13,10 @@
  *   serverShPath    {string}  Path to server.sh for restart (optional)
  */
 
-const http         = require('http');
-const fs           = require('fs');
-const path         = require('path');
-const { execSync } = require('child_process');
+import http         from 'http';
+import fs           from 'fs';
+import path         from 'path';
+import { execSync } from 'child_process';
 
 class FigurerClient {
   constructor(options = {}) {
@@ -201,4 +200,4 @@ class FigurerClient {
   }
 }
 
-module.exports = FigurerClient;
+export default FigurerClient;

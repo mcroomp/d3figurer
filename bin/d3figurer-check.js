@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-'use strict';
 /**
  * d3figurer-check — layout QA tool
  *
@@ -13,9 +12,9 @@
  *   d3figurer server start --src-dir <dir>
  */
 
-const path    = require('path');
-const { checkAndReport, watchFigure } = require('../src/checker');
-const FigurerClient = require('../src/client');
+import path from 'path';
+import { checkAndReport, watchFigure } from '../src/checker.js';
+import FigurerClient from '../src/client.js';
 
 const args   = process.argv.slice(2);
 const figure = args.find(a => !a.startsWith('-'));

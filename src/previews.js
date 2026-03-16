@@ -1,24 +1,11 @@
-'use strict';
 /**
  * previews.js — generate and check static figure preview galleries.
- *
- * Each figure is rendered server-side (via figure.js + jsdom) and embedded as
- * inline SVG, so the resulting HTML files are fully self-contained — no browser
- * require() shims, no d3.min.js copy, no iframes loading remote scripts.
- *
- * Public API:
- *   generatePreviews(srcDir, previewDir, options) → { ok, total, errors }
- *   checkPreviews(previewDir, figureNames)        → { ok, total, errors }
- *   discoverFigures(srcDir)                       → string[]
- *   flatName(name)                                → string
  */
 
-const fs   = require('fs');
-const path = require('path');
+import fs            from 'fs';
+import path          from 'path';
+import { pathToFileURL } from 'url';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Recursively find all figure names (dirs containing figure.js, skipping 'shared'). */
 function discoverFigures(dir, prefix = '') {
   const names = [];
   for (const entry of fs.readdirSync(dir)) {
@@ -35,17 +22,16 @@ function discoverFigures(dir, prefix = '') {
   return names;
 }
 
-/** Convert a figure name like 'diagram/transformer' to a flat filename stem. */
 function flatName(name) {
   return name.replace(/\//g, '_');
 }
 
-/** Call figure.js in Node (server-side jsdom) and return its SVG string. */
-function renderInlineSvg(srcDir, name) {
+async function renderInlineSvg(srcDir, name) {
   try {
     const figPath = path.join(srcDir, name, 'figure.js');
-    try { delete require.cache[require.resolve(figPath)]; } catch (_) {}
-    return { svg: require(figPath)(), error: null };
+    const figUrl  = pathToFileURL(figPath).href + '?t=' + Date.now();
+    const mod     = await import(figUrl);
+    return { svg: mod.default(), error: null };
   } catch (e) {
     const msg = e.message.slice(0, 80).replace(/</g, '&lt;');
     return {
@@ -58,8 +44,6 @@ function renderInlineSvg(srcDir, name) {
     };
   }
 }
-
-// ── HTML builders ─────────────────────────────────────────────────────────────
 
 function buildFigureHtml(name, svg, options = {}) {
   const { fontCSS = '' } = options;
@@ -85,7 +69,6 @@ svg { max-width: 100%; height: auto; display: block;
 ${svg}
 <script>
 (function() {
-  // Hide chrome when embedded in gallery iframe
   if (window.self !== window.top) {
     document.querySelector('h2').style.display = 'none';
     document.body.style.padding = '0';
@@ -182,62 +165,23 @@ applyFilter();
 </html>`;
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
-
-/**
- * Generate a preview gallery for all figures in srcDir.
- *
- * Each figure is rendered server-side and embedded as inline SVG — no browser
- * JS shimming needed.
- *
- * @param {string}   srcDir     Directory containing figure modules
- * @param {string}   previewDir Output directory for HTML files
- * @param {object}   options
- * @param {string}   [options.fontCSS]  CSS injected into every page (e.g. @font-face blocks)
- * @param {string}   [options.title]    Gallery title shown in the header
- * @param {string[]} [options.figures]  Explicit list of figure names (default: auto-discover)
- * @returns {{ ok: number, total: number, errors: Array<{name, message}> }}
- */
-function generatePreviews(srcDir, previewDir, options = {}) {
+async function generatePreviews(srcDir, previewDir, options = {}) {
   const { fontCSS = '', title = 'd3figurer gallery', figures: figureNames } = options;
   const names = figureNames || discoverFigures(srcDir);
-
   fs.mkdirSync(previewDir, { recursive: true });
-
   const entries = [];
   const errors  = [];
-
   for (const name of names) {
     const stem = flatName(name);
-    const { svg, error } = renderInlineSvg(srcDir, name);
+    const { svg, error } = await renderInlineSvg(srcDir, name);
     if (error) errors.push({ name, message: error });
-    fs.writeFileSync(
-      path.join(previewDir, `${stem}.html`),
-      buildFigureHtml(name, svg, { fontCSS }),
-      'utf8',
-    );
+    fs.writeFileSync(path.join(previewDir, `${stem}.html`), buildFigureHtml(name, svg, { fontCSS }), 'utf8');
     entries.push({ stem, name, error });
   }
-
-  fs.writeFileSync(
-    path.join(previewDir, 'index.html'),
-    buildIndexHtml(entries, { fontCSS, title }),
-    'utf8',
-  );
-
+  fs.writeFileSync(path.join(previewDir, 'index.html'), buildIndexHtml(entries, { fontCSS, title }), 'utf8');
   return { ok: names.length - errors.length, total: names.length, errors };
 }
 
-/**
- * Verify that preview HTML files were generated correctly.
- *
- * Since previews use inline SVG (no browser JS rendering), this is a simple
- * file-based check — no Chrome/puppeteer needed.
- *
- * @param {string}   previewDir Directory written by generatePreviews
- * @param {string[]} figureNames List of figure names to check
- * @returns {{ ok: number, total: number, errors: Array<{name, message}> }}
- */
 function checkPreviews(previewDir, figureNames) {
   const errors = [];
   for (const name of figureNames) {
@@ -245,15 +189,12 @@ function checkPreviews(previewDir, figureNames) {
     const htmlPath = path.join(previewDir, `${stem}.html`);
     try {
       const content = fs.readFileSync(htmlPath, 'utf8');
-      if (!content.includes('<svg')) {
-        errors.push({ name, message: 'no <svg> in generated HTML' });
-      }
+      if (!content.includes('<svg')) errors.push({ name, message: 'no <svg> in generated HTML' });
     } catch (e) {
       errors.push({ name, message: `file missing: ${e.message}` });
     }
   }
-  const ok = figureNames.length - errors.length;
-  return { ok, total: figureNames.length, errors };
+  return { ok: figureNames.length - errors.length, total: figureNames.length, errors };
 }
 
-module.exports = { generatePreviews, checkPreviews, discoverFigures, flatName };
+export { generatePreviews, checkPreviews, discoverFigures, flatName };

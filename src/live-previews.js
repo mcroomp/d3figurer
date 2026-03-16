@@ -1,43 +1,35 @@
-'use strict';
 /**
  * live-previews.js — generate and check live-reload iframe preview galleries.
  *
- * Unlike static previews (inline SVG), live previews load figure.js directly
- * from disk via <script> tags, so the browser picks up source changes on
- * refresh without re-running the generator.
+ * Each figure page loads its dependencies as plain <script> tags (no ES modules),
+ * which works with both file:// and http:// without CORS restrictions.
  *
- * Each figure page includes a browser require() shim that maps:
- *   require('jsdom')          → BrowserJSDOM (wraps native browser DOM)
- *   require('d3')             → window.d3 (loaded from d3.min.js)
- *   require('.../helpers')    → window.__HELPERS (helpers.js inlined at build time)
- *   require('.../styles')     → window.__S (styles object from styles.js)
- *   require('country-flag-icons/...') → window.__FLAGS_3X2
+ * Strategy: at generation time, transform each source file into a global-script
+ * variant that sets / reads window globals instead of using import / export:
+ *   d3.min.js      → (unchanged) sets window.d3
+ *   jsdom-shim.js  → sets window.JSDOM
+ *   {stem}.data.js → sets window.__fig_data
+ *   {stem}.run.js  → reads globals, calls figure, inserts SVG
  *
  * Public API:
- *   generateLivePreviews(srcDir, previewDir, options) → { ok, total, errors }
+ *   generateLivePreviews(srcDir, previewDir, options) → Promise<{ ok, total, errors }>
  *   checkLivePreviews(previewDir, figureNames, options) → Promise<{ ok, total, errors }>
  */
 
-const fs   = require('fs');
-const path = require('path');
-const { discoverFigures, flatName } = require('./previews');
+import fs   from 'fs';
+import path  from 'path';
+import { discoverFigures, flatName } from './previews.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Walk up from a resolved module path to find the package root (has package.json). */
-function findPkgRoot(resolvedMain) {
-  let dir = path.dirname(resolvedMain);
+function findPkgRoot(resolvedPath) {
+  let dir = path.dirname(resolvedPath);
   while (true) {
     if (fs.existsSync(path.join(dir, 'package.json'))) return dir;
     const parent = path.dirname(dir);
-    if (parent === dir) throw new Error('Cannot find package root for: ' + resolvedMain);
+    if (parent === dir) throw new Error('Cannot find package root for: ' + resolvedPath);
     dir = parent;
   }
-}
-
-/** Try to load country-flag-icons JSON; returns '{}' if not installed. */
-function loadFlagsJson() {
-  try { return JSON.stringify(require('country-flag-icons/string/3x2')); } catch (_) { return '{}'; }
 }
 
 /** Read any .svg files in a figure's source directory; copy them to previewDir. */
@@ -54,19 +46,151 @@ function loadFigureCustomSvgs(figDir, previewDir) {
   return result;
 }
 
-// ── HTML builders ─────────────────────────────────────────────────────────────
+// ── Source transformers ───────────────────────────────────────────────────────
 
 /**
- * Build the per-figure HTML page for a live preview.
- *
- * The page loads d3.min.js, inlines helpers.js source (so require('jsdom'),
- * require('d3'), require('./styles') all resolve), then loads figure.js from
- * its source path via a <script> tag.  When the figure changes on disk, a
- * browser refresh picks up the new version without regenerating this HTML.
+ * Transform a styles.js (export default {...}) into a global-setter script.
+ * Sets window.__d3fig_styles.
  */
+function transformStyles(src) {
+  return src.replace(/^\s*export\s+default\s+/m, 'window.__d3fig_styles = ').trimEnd() + '\n';
+}
+
+/**
+ * Transform helpers.js into a global-setter script.
+ * Removes import lines, wraps in IIFE that reads window globals and sets window.__d3fig_helpers.
+ */
+function transformHelpers(src) {
+  // Collect destructured names from the export statement
+  const exportMatch = src.match(/export\s*\{([^}]+)\}/);
+  const exportedNames = exportMatch
+    ? exportMatch[1].split(',').map(s => s.trim()).filter(Boolean)
+    : [];
+
+  const body = src
+    .replace(/^import\s+.*?;\n/gm, '')        // remove all import lines
+    .replace(/^export\s*\{[^}]+\};\s*$/m, ''); // remove export {...}
+
+  const globalSetters = exportedNames.map(n => `${n}: ${n}`).join(', ');
+  return `(function() {
+var d3    = window.d3;
+var JSDOM = window.JSDOM;
+var S     = window.__d3fig_styles;
+${body.trim()}
+window.__d3fig_helpers = { ${globalSetters} };
+Object.assign(window, window.__d3fig_helpers);
+})();\n`;
+}
+
+/**
+ * Transform data.js (export default [...]) into a global-setter script.
+ * Sets window.__d3fig_data.
+ */
+function transformData(src) {
+  return src.replace(/^\s*export\s+default\s+/m, 'window.__d3fig_data = ').trimEnd() + '\n';
+}
+
+/**
+ * Transform figure.js into a self-contained runner script.
+ * Removes imports (replaces with window-global reads), transforms export default function
+ * into an immediate call that inserts the SVG into the page.
+ *
+ * @param {string} src      - figure.js source
+ * @param {string} stem     - flatName of the figure (for postMessage)
+ * @param {object} extraGlobals - map of bare specifier → window expression for extra deps
+ */
+function transformFigure(src, stem, extraGlobals = {}) {
+  // Parse import statements to build local variable assignments from window globals
+  const preamble = [];
+  let body = src.replace(
+    /^import\s+(.*?)\s+from\s+['"]([^'"]+)['"];\n/gm,
+    (match, spec, mod) => {
+      const g = extraGlobals[mod];
+      if (g) {
+        if (spec.startsWith('* as ')) {
+          preamble.push(`var ${spec.slice(5)} = ${g};`);
+        } else {
+          preamble.push(`var ${spec} = ${g};`);
+        }
+      }
+      return '';
+    },
+  );
+
+  // Replace `export default function [name]() {` with a named function declaration
+  body = body.replace(/export\s+default\s+function\s*(\w*)\s*\(/, (_, name) =>
+    `function ${name || '__figure'}(`);
+  // Determine the function name (fallback to __figure)
+  const fnNameMatch = body.match(/^function\s+(\w+)\s*\(/m);
+  const fnName = fnNameMatch ? fnNameMatch[1] : '__figure';
+
+  return `(function() {
+var d3   = window.d3;
+var S    = window.__d3fig_styles;
+var data = window.__d3fig_data;
+${preamble.join('\n')}
+${body.trim()}
+var svgHtml = ${fnName}();
+document.body.insertAdjacentHTML('beforeend', svgHtml);
+var svg = document.querySelector('svg');
+if (svg) {
+  if (window.self !== window.top) {
+    document.querySelector('h2').style.display = 'none';
+    document.body.style.padding = '0';
+  }
+  var w = parseFloat(svg.getAttribute('width'))  || svg.viewBox.baseVal.width  || 900;
+  var h = parseFloat(svg.getAttribute('height')) || svg.viewBox.baseVal.height || 500;
+  window.parent.postMessage({ type: 'figureReady', name: '${stem}', width: w, height: h }, '*');
+}
+})();\n`;
+}
+
+// ── JSDOM global shim (plain script, sets window.JSDOM) ──────────────────────
+
+const JSDOM_GLOBAL_SRC = `\
+// Browser JSDOM shim — wraps the real DOM so figure helpers work unchanged.
+window.JSDOM = class JSDOM {
+  constructor() {
+    var body = document.createElement('div');
+    this.window = {
+      document: {
+        body:             body,
+        createElement:    function(t)      { return document.createElement(t); },
+        createElementNS:  function(ns, t)  { return document.createElementNS(ns, t); },
+        createTextNode:   function(txt)    { return document.createTextNode(txt); },
+        querySelector:    function(sel)    { return body.querySelector(sel); },
+        querySelectorAll: function(sel)    { return body.querySelectorAll(sel); },
+      }
+    };
+  }
+};
+`;
+
+// ── HTML builders ─────────────────────────────────────────────────────────────
+
 function buildLiveFigureHtml(name, opts) {
-  const { fontCSS = '', d3figurerHelpersSrc, helpersSrc, stylesJson, flagsJson = '{}', customSvgsJson = '{}', dataJsRelPath = null, figureJsRelPath } = opts;
-  const stem = flatName(name);
+  const { fontCSS = '', customSvgsJson = '{}', stem = '', extraScripts = [] } = opts;
+
+  // Inline call script: invokes __d3fig_figure(), inserts SVG, notifies parent
+  const callScript = `(function() {
+var svgHtml = (window.__d3fig_figure || function(){ return ''; })({
+  data: window.__d3fig_data,
+  S: window.__d3fig_styles,
+  d3: window.d3,
+  assets: window.__d3fig_assets || {},
+});
+document.body.insertAdjacentHTML('beforeend', svgHtml);
+var svg = document.querySelector('svg');
+if (svg) {
+  if (window.self !== window.top) {
+    document.querySelector('h2').style.display = 'none';
+    document.body.style.padding = '0';
+  }
+  var w = parseFloat(svg.getAttribute('width'))  || svg.viewBox.baseVal.width  || 900;
+  var h = parseFloat(svg.getAttribute('height')) || svg.viewBox.baseVal.height || 500;
+  window.parent.postMessage({ type: 'figureReady', name: '${stem}', width: w, height: h }, '*');
+}
+})();`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -88,108 +212,15 @@ svg { max-width: 100%; height: auto; display: block;
 </head>
 <body>
 <h2>${name}</h2>
-<script>
-// ── Injected data ──────────────────────────────────────────────────────────
-window.__S           = ${stylesJson};
-window.__S.fontStyle = function() {};  // no-op in browser
-window.__FLAGS_3X2   = ${flagsJson};
-window.__CUSTOM_FLAGS = ${customSvgsJson};
-window.__FIGURE_DATA  = null; // loaded dynamically via loadScript (data.js)
-
-// ── Browser JSDOM shim ─────────────────────────────────────────────────────
-// figure.js calls: const { JSDOM } = require('jsdom'); new JSDOM('...')
-// In the browser we wrap the real DOM instead.
-class BrowserJSDOM {
-  constructor() {
-    const body = document.createElement('div');
-    this.window = {
-      document: {
-        body,
-        createElement:    function(t)     { return document.createElement(t); },
-        createElementNS:  function(ns, t) { return document.createElementNS(ns, t); },
-        createTextNode:   function(txt)   { return document.createTextNode(txt); },
-        querySelector:    function(sel)   { return body.querySelector(sel); },
-        querySelectorAll: function(sel)   { return body.querySelectorAll(sel); },
-      }
-    };
-  }
-}
-
-// ── require() shim ─────────────────────────────────────────────────────────
-window.require = function(id) {
-  if (id === 'jsdom')                              return { JSDOM: BrowserJSDOM };
-  if (id === 'd3')                                 return window.d3;
-  if (id === 'd3figurer')                          return { helpers: window.__D3FIGURER_HELPERS };
-  if (id.includes('helpers'))                      return window.__HELPERS;
-  if (id.includes('styles'))                       return window.__S;
-  if (id.startsWith('country-flag-icons'))         return window.__FLAGS_3X2;
-  if (id.includes('data.js') || id.includes('data.json')) return window.__FIGURE_DATA;
-  throw new Error('Cannot require: ' + id);
-};
-
-function loadScript(src) {
-  return new Promise(function(resolve, reject) {
-    var s = document.createElement('script');
-    s.src = src + '?t=' + Date.now();  // cache-bust for live reload
-    s.onload  = resolve;
-    s.onerror = function() { reject(new Error('Failed to load: ' + src)); };
-    document.head.appendChild(s);
-  });
-}
-
-async function main() {
-  await loadScript('d3.min.js');
-
-  // Load data.js via script tag (cache-busted) — avoids CORS issues with file:// URLs
-  ${dataJsRelPath ? `window.module = { exports: null };
-  await loadScript('${dataJsRelPath}');
-  window.__FIGURE_DATA = window.module.exports;` : '// no data.js for this figure'}
-
-  // d3figurer src/helpers.js inlined so require('d3figurer').helpers resolves.
-  {
-    const module = { exports: {} };
-${d3figurerHelpersSrc}
-    window.__D3FIGURER_HELPERS = module.exports;
-  }
-
-  // helpers.js inlined at gallery-generation time so require('d3')/require('jsdom')
-  // inside it resolve via the shim above.
-  {
-    const module = { exports: {} };
-${helpersSrc}
-    window.__HELPERS = module.exports;
-  }
-
-  window.module = { exports: {} };
-  await loadScript('${figureJsRelPath || '../src/' + name + '/figure.js'}');
-
-  const fn = window.module.exports;
-  if (typeof fn !== 'function') {
-    document.body.innerHTML += '<p class="err">figure.js did not export a function</p>';
-    return;
-  }
-
-  const svgHtml = fn();
-  document.body.insertAdjacentHTML('beforeend', svgHtml);
-
-  // Notify parent gallery frame (for auto-sizing iframes)
-  var svg = document.querySelector('svg');
-  if (svg) {
-    if (window.self !== window.top) {
-      document.querySelector('h2').style.display = 'none';
-      document.body.style.padding = '0';
-    }
-    var w = parseFloat(svg.getAttribute('width'))  || svg.viewBox.baseVal.width  || 900;
-    var h = parseFloat(svg.getAttribute('height')) || svg.viewBox.baseVal.height || 500;
-    window.parent.postMessage({ type: 'figureReady', name: '${stem}', width: w, height: h }, '*');
-  }
-}
-
-main().catch(function(err) {
-  console.error('[live-preview] ${name}:', err);
-  document.body.innerHTML += '<p class="err">Error: ' + err.message + '</p>';
-});
-</script>
+<script src="d3.min.js"></script>
+<script src="jsdom-shim.js"></script>
+<script src="styles.js"></script>
+<script src="helpers.js"></script>
+${extraScripts.map(s => `<script src="${s}"></script>`).join('\n')}
+<script>window.__CUSTOM_FLAGS = ${customSvgsJson};</script>
+<script src="../${name}/data.js"></script>
+<script src="../${name}/figure.js"></script>
+<script>${callScript}</script>
 </body>
 </html>`;
 }
@@ -279,7 +310,6 @@ window.addEventListener('message', function(e) {
   if (!iframe) return;
   iframe.style.height = Math.round((body.clientWidth / e.data.width) * e.data.height) + 'px';
 });
-
 function applyFilter() {
   var q = document.getElementById('filter').value.toLowerCase();
   var n = 0;
@@ -291,7 +321,6 @@ function applyFilter() {
   var total = document.querySelectorAll('.card').length;
   document.getElementById('count').textContent = (q ? n + ' / ' : '') + total + ' figures';
 }
-
 function setBg(bg, btn) {
   document.querySelectorAll('.btns .btn').forEach(function(b) { b.classList.remove('active'); });
   btn.classList.add('active');
@@ -300,7 +329,6 @@ function setBg(bg, btn) {
     b.classList.add(bg);
   });
 }
-
 applyFilter();
 </script>
 </body>
@@ -310,62 +338,67 @@ applyFilter();
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Generate a live-reload iframe preview gallery.
+ * Generate a preview gallery using plain <script> tags (no ES modules).
+ * All source files are transformed into global-setter scripts so they work
+ * with file:// URLs without any CORS restrictions.
  *
- * Each figure page loads figure.js directly from the source tree via a
- * <script> tag, so refreshing the browser picks up edits without re-running
- * the generator.  d3.min.js is copied once into previewDir; helpers.js is
- * inlined into every figure page at generation time.
- *
- * @param {string}   srcDir      Directory containing figure modules (e.g. figures/d3/src)
+ * @param {string}   srcDir      Directory containing figure modules
  * @param {string}   previewDir  Output directory for the preview HTML files
  * @param {object}   options
- * @param {string}   [options.fontCSS]    CSS injected into every page (e.g. @font-face blocks)
- * @param {string}   [options.title]      Gallery title shown in the header
- * @param {string[]} [options.figures]    Explicit list of figure names (default: auto-discover)
- * @returns {{ ok: number, total: number, errors: Array<{name, message}> }}
+ * @param {string}   [options.fontCSS]    CSS injected into every page
+ * @param {string}   [options.title]      Gallery title
+ * @param {string[]} [options.figures]    Explicit figure names (default: auto-discover)
+ * @returns {Promise<{ ok: number, total: number, errors: Array<{name, message}> }>}
  */
-function generateLivePreviews(srcDir, previewDir, options = {}) {
+async function generateLivePreviews(srcDir, previewDir, options = {}) {
   const { fontCSS = '', title = 'd3figurer gallery', figures: figureNames } = options;
   const names = figureNames || discoverFigures(srcDir);
 
   fs.mkdirSync(previewDir, { recursive: true });
 
-  // Copy d3.min.js into previewDir (browsers can't follow node_modules symlinks)
-  const d3Root = findPkgRoot(require.resolve('d3'));
-  fs.copyFileSync(
-    path.join(d3Root, 'dist', 'd3.min.js'),
-    path.join(previewDir, 'd3.min.js'),
-  );
+  // d3.min.js — UMD, sets window.d3
+  const d3Url  = import.meta.resolve('d3');
+  const d3Root = findPkgRoot(new URL(d3Url).pathname);
+  fs.copyFileSync(path.join(d3Root, 'dist', 'd3.min.js'), path.join(previewDir, 'd3.min.js'));
 
-  // Read d3figurer src/helpers.js once — inlined so require('d3figurer').helpers resolves
-  const d3figurerHelpersSrc = fs.readFileSync(path.join(__dirname, 'helpers.js'), 'utf8');
+  // jsdom-shim.js — plain script, sets window.JSDOM
+  fs.writeFileSync(path.join(previewDir, 'jsdom-shim.js'), JSDOM_GLOBAL_SRC, 'utf8');
 
-  // Read helpers.js source once — inlined into every figure page
-  const helpersSrc = fs.readFileSync(path.join(srcDir, 'shared', 'helpers.js'), 'utf8');
+  // styles.js — transform shared/styles.js to global setter
+  const sharedDir = path.join(srcDir, 'shared');
+  const stylesSrc = path.join(sharedDir, 'styles.js');
+  if (fs.existsSync(stylesSrc)) {
+    fs.writeFileSync(path.join(previewDir, 'styles.js'),
+      transformStyles(fs.readFileSync(stylesSrc, 'utf8')), 'utf8');
+  }
 
-  // Build styles JSON (strip function-valued properties — they can't serialise)
-  const styles = (() => { try { return require(path.join(srcDir, 'shared', 'styles.js')); } catch (_) { return {}; } })();
-  const stylesJson = JSON.stringify(
-    Object.fromEntries(Object.entries(styles).filter(([, v]) => typeof v !== 'function')),
-  );
+  // helpers.js — transform shared/helpers.js to global setter
+  const helpersSrc = path.join(sharedDir, 'helpers.js');
+  if (fs.existsSync(helpersSrc)) {
+    fs.writeFileSync(path.join(previewDir, 'helpers.js'),
+      transformHelpers(fs.readFileSync(helpersSrc, 'utf8')), 'utf8');
+  }
 
-  const flagsJson = loadFlagsJson();
+  // Extra bare-specifier globals (e.g. country-flag-icons)
+  const extraGlobals = {};
+  const extraScripts = [];
+  try {
+    const flagsModule = await import('country-flag-icons/string/3x2');
+    const flagsData   = flagsModule.default || flagsModule;
+    fs.writeFileSync(path.join(previewDir, 'country-flag-icons.js'),
+      `window.__d3fig_assets = window.__d3fig_assets || {};\nwindow.__d3fig_assets.flags = ${JSON.stringify(flagsData)};\n`, 'utf8');
+    extraScripts.push('country-flag-icons.js');
+  } catch (_) {}
 
   const errors  = [];
   const entries = [];
 
   for (const name of names) {
-    const stem = flatName(name);
+    const stem   = flatName(name);
     const figDir = path.join(srcDir, name);
     const customSvgsJson = JSON.stringify(loadFigureCustomSvgs(figDir, previewDir));
-    const dataJsPath = path.join(figDir, 'data.js');
-    const dataJsRelPath = fs.existsSync(dataJsPath)
-      ? path.relative(previewDir, dataJsPath).replace(/\\/g, '/')
-      : null;
 
-    const figureJsRelPath = path.relative(previewDir, path.join(figDir, 'figure.js')).replace(/\\/g, '/');
-    const html = buildLiveFigureHtml(name, { fontCSS, d3figurerHelpersSrc, helpersSrc, stylesJson, flagsJson, customSvgsJson, dataJsRelPath, figureJsRelPath });
+    const html = buildLiveFigureHtml(name, { fontCSS, customSvgsJson, stem, extraScripts });
     try {
       fs.writeFileSync(path.join(previewDir, `${stem}.html`), html, 'utf8');
       entries.push({ stem, name });
@@ -385,24 +418,11 @@ function generateLivePreviews(srcDir, previewDir, options = {}) {
 
 /**
  * Verify that live preview iframes render correctly in a real browser.
- *
- * Connects to the already-running Chrome instance (started by server.sh),
- * loads preview/index.html, and checks each figure's iframe for:
- *   - An <svg> element (figure rendered successfully)
- *   - No .err element (no "did not export a function" etc.)
- *   - No browser console errors
- *
- * Requires server.sh to be running (Chrome must be on chromeUrl).
- *
- * @param {string}   previewDir   Directory written by generateLivePreviews
- * @param {string[]} figureNames  Figure names to check
- * @param {object}   options
- * @param {string}   [options.chromeUrl]  Chrome DevTools URL (default: 'http://127.0.0.1:9230')
- * @returns {Promise<{ ok: number, total: number, errors: Array<{name, message}> }>}
+ * Uses file:// URLs — the plain <script> approach has no CORS restrictions.
  */
 async function checkLivePreviews(previewDir, figureNames, options = {}) {
   const { chromeUrl = 'http://127.0.0.1:9230' } = options;
-  const puppeteer = require('puppeteer');
+  const { default: puppeteer } = await import('puppeteer');
 
   let browser;
   try {
@@ -411,21 +431,18 @@ async function checkLivePreviews(previewDir, figureNames, options = {}) {
     throw new Error(`Cannot connect to Chrome at ${chromeUrl} — is server.sh running? (${e.message})`);
   }
 
-  // Check each figure page individually — more reliable than the gallery iframe approach
-  // because file:// URLs don't trigger networkidle0 for nested iframes.
   const errors = [];
 
   for (const name of figureNames) {
-    const stem    = flatName(name);
-    const figUrl  = 'file://' + path.join(previewDir, `${stem}.html`).replace(/\\/g, '/');
-    const page    = await browser.newPage();
+    const stem   = flatName(name);
+    const figUrl = 'file://' + path.join(previewDir, `${stem}.html`).replace(/\\/g, '/');
+    const page   = await browser.newPage();
     const consoleErrors = [];
     page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
     page.on('pageerror', err => consoleErrors.push('PAGEERROR: ' + err.message));
 
     try {
       await page.goto(figUrl, { waitUntil: 'networkidle0', timeout: 15000 });
-      // Wait for the async main() inside the figure page to finish rendering
       await page.waitForFunction(() => document.querySelector('svg') || document.querySelector('.err'),
         { timeout: 10000 }).catch(() => {});
 
@@ -446,8 +463,7 @@ async function checkLivePreviews(previewDir, figureNames, options = {}) {
   }
 
   await browser.disconnect();
-
   return { ok: figureNames.length - errors.length, total: figureNames.length, errors };
 }
 
-module.exports = { generateLivePreviews, checkLivePreviews };
+export { generateLivePreviews, checkLivePreviews };

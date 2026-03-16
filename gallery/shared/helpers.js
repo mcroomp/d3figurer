@@ -1,6 +1,5 @@
-'use strict';
-const d3helpers = require('../../src/helpers');
-const S = require('./styles.js');
+import { makeSVG, addMarker, addIcon } from '../../src/helpers.js';
+import S from './styles.js';
 
 /**
  * Append a text element with standard gallery Montserrat styling.
@@ -37,4 +36,4 @@ function addText(parent, x, y, text, size, weight, fill, anchor, italic) {
   return el;
 }
 
-module.exports = Object.assign({}, d3helpers, { addText });
+export { makeSVG, addMarker, addIcon, addText };

@@ -2,7 +2,11 @@
   "name": "d3figurer",
   "version": "0.1.0",
   "description": "Server-side D3.js figure generation with Chrome/Puppeteer",
+  "type": "module",
   "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
   "bin": {
     "d3figurer":           "bin/d3figurer.js",
     "d3figurer-server":    "bin/d3figurer-server.js",
