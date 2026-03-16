@@ -49,6 +49,9 @@ jobs:
       - name: Make scripts executable
         run: chmod +x server.sh mcp.sh setup_mcp.sh test.sh dev.sh
 
+      - name: Install Ghostscript
+        run: sudo apt-get install -y ghostscript
+
       - name: Start render server
         run: ./dev.sh start
 

@@ -42,13 +42,18 @@ function patchPdfMeta(s) {
 
 function reprocessPdf(pdfPath) {
   const tmp = pdfPath + '.tmp';
-  spawnSync('gs', [
+  const gsResult = spawnSync('gs', [
     '-dBATCH', '-dNOPAUSE', '-dQUIET',
     '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.4', '-dDocumentMetadata=false', '-dCompressPages=false',
     `-sOutputFile=${tmp}`,
     '-f', pdfPath,
     '-c', '[ /Creator (d3figurer) /Producer (d3figurer) /CreationDate (D:20000101000000Z) /ModDate (D:20000101000000Z) /DOCINFO pdfmark',
   ], { timeout: 30000 });
+  if (gsResult.error || gsResult.status !== 0) {
+    try { fs.unlinkSync(tmp); } catch (_) {}
+    const reason = gsResult.error ? gsResult.error.message : `exit ${gsResult.status}`;
+    throw new Error(`gs failed (${reason}): ${pdfPath}`);
+  }
   fs.renameSync(tmp, pdfPath);
   try {
     const raw = fs.readFileSync(pdfPath);
