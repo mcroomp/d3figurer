@@ -145,6 +145,28 @@ if (svg) {
 })();\n`;
 }
 
+// ── d3figurer core helpers (browser-compatible IIFE, sets window.makeSVG etc.) ──
+
+/**
+ * Transform d3figurer/src/helpers.js into a browser-compatible IIFE.
+ * Strips ESM imports/exports, reads d3 and JSDOM from window globals,
+ * and exposes makeSVG / addMarker / addIcon as window properties.
+ */
+function generateD3FigurerBrowserScript(src) {
+  const body = src
+    .replace(/^import\s+.*?;\n/gm, '')         // strip import lines
+    .replace(/^export\s*\{[^}]+\};\s*$/m, ''); // strip export {...}
+
+  return `(function() {
+var d3    = window.d3;
+var JSDOM = window.JSDOM;
+${body.trim()}
+window.makeSVG   = typeof makeSVG   !== 'undefined' ? makeSVG   : window.makeSVG;
+window.addMarker = typeof addMarker !== 'undefined' ? addMarker : window.addMarker;
+window.addIcon   = typeof addIcon   !== 'undefined' ? addIcon   : window.addIcon;
+})();\n`;
+}
+
 // ── JSDOM global shim (plain script, sets window.JSDOM) ──────────────────────
 
 const JSDOM_GLOBAL_SRC = `\
@@ -214,6 +236,7 @@ svg { max-width: 100%; height: auto; display: block;
 <h2>${name}</h2>
 <script src="d3.min.js"></script>
 <script src="jsdom-shim.js"></script>
+<script src="d3figurer-browser.js"></script>
 <script src="styles.js"></script>
 <script src="helpers.js"></script>
 ${extraScripts.map(s => `<script src="${s}"></script>`).join('\n')}
@@ -363,6 +386,14 @@ async function generateLivePreviews(srcDir, previewDir, options = {}) {
 
   // jsdom-shim.js — plain script, sets window.JSDOM
   fs.writeFileSync(path.join(previewDir, 'jsdom-shim.js'), JSDOM_GLOBAL_SRC, 'utf8');
+
+  // d3figurer-browser.js — browser-compatible makeSVG / addMarker / addIcon
+  const d3figHelpersPath = new URL('./helpers.js', import.meta.url).pathname;
+  if (fs.existsSync(d3figHelpersPath)) {
+    const d3figSrc = fs.readFileSync(d3figHelpersPath, 'utf8');
+    fs.writeFileSync(path.join(previewDir, 'd3figurer-browser.js'),
+      generateD3FigurerBrowserScript(d3figSrc), 'utf8');
+  }
 
   // styles.js — transform shared/styles.js to global setter
   const sharedDir = path.join(srcDir, 'shared');
