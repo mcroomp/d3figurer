@@ -1,0 +1,31 @@
+globalThis.__d3fig_data = {
+  "models": [
+    {
+      "name": "GPT-1",
+      "params": 117,
+      "paramsLabel": "117M",
+      "year": 2018,
+      "color": "#cccccc",
+      "textColor": "#555555"
+    },
+    {
+      "name": "GPT-2",
+      "params": 1500,
+      "paramsLabel": "1.5B",
+      "year": 2019,
+      "color": "#999999",
+      "textColor": "#ffffff"
+    },
+    {
+      "name": "GPT-3",
+      "params": 175000,
+      "paramsLabel": "175B",
+      "year": 2020,
+      "color": "#e4003b",
+      "textColor": "#ffffff"
+    }
+  ],
+  "misc": {
+    "unit_label": "parámetros"
+  }
+};

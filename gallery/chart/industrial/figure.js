@@ -1,9 +1,4 @@
-'use strict';
-const { makeSVG, addMarker } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function() {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
 
   // ── Layout ────────────────────────────────────────────────────────────────
   const W = 1000, H = 580;         // canvas size
@@ -39,8 +34,8 @@ module.exports = function() {
 
   const { svg, document } = makeSVG(W, H);
 
-  // DATA — loaded from data.json (edit that file to customise the figure)
-  const { revs } = require('./data.json');
+  // DATA — loaded from data.js (edit that file to customise the figure)
+  const { revs, misc } = data;
 
   const baseY = revs.map((_, i) => H - baseH[i] - 50);
 
@@ -121,7 +116,7 @@ module.exports = function() {
   svg.append('text').attr('x', startX + 3.5 * (PW + GAP)).attr('y', 44)
     .attr('text-anchor','middle')
     .attr('font-family',S.FONT).attr('font-size',FONT_NOW).attr('font-weight',700)
-    .attr('fill',S.RED).text('◀ Actualidad');
+    .attr('fill',S.RED).text(misc.current_label);
 
   return document.body.innerHTML;
 };

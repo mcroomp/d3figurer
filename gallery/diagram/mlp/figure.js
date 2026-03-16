@@ -1,9 +1,4 @@
-'use strict';
-const { makeSVG, addMarker } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function() {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
   // ── Layout ──────────────────────────────────────────────────────────────
   const W = 880, H = 540;               // canvas size (SVG pixels)
   const IX = 140;                        // input layer x centre
@@ -22,6 +17,8 @@ module.exports = function() {
   const FONT_OUTPUT = 24;               // font size for output node "Salida" label
   const FONT_LAYER = 23;                 // font size for layer name labels
   const FONT_ARROW = 21;                 // font size for direction labels
+
+  const { misc } = data;
 
   const { svg, document } = makeSVG(W, H);
 
@@ -89,13 +86,13 @@ module.exports = function() {
   svg.append('text').attr('x', OX).attr('y', outputY)
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_OUTPUT).attr('font-weight', 700)
-    .attr('fill', S.WHITE).text('Salida');
+    .attr('fill', S.WHITE).text(misc.node_output);
 
   // Layer labels
   [
-    { x: IX,  label: 'Capa de Entrada' },
-    { x: HX,  label: 'Capa Oculta' },
-    { x: OX,  label: 'Capa de Salida' },
+    { x: IX,  label: misc.layer_input },
+    { x: HX,  label: misc.layer_hidden },
+    { x: OX,  label: misc.layer_output },
   ].forEach(l => {
     svg.append('text').attr('x', l.x).attr('y', LAYER_LABEL_Y)
       .attr('text-anchor','middle')
@@ -108,14 +105,14 @@ module.exports = function() {
     .attr('text-anchor','middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_ARROW).attr('font-style','italic')
     .attr('fill', S.RED).attr('opacity', 0.7)
-    .text('\u2190 Retropropagación del error');
+    .text(misc.label_backprop);
 
   // Forward pass label
   svg.append('text').attr('x', FORWARD_LABEL_X).attr('y', ARROW_LABEL_Y)
     .attr('text-anchor','middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_ARROW).attr('font-style','italic')
     .attr('fill', S.GRAY)
-    .text('Paso hacia adelante \u2192');
+    .text(misc.label_forward);
 
   return document.body.innerHTML;
 };

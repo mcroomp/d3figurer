@@ -1,9 +1,4 @@
-'use strict';
-const { makeSVG } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function() {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
   // ── Layout ──────────────────────────────────────────────────────────────
   const W = 900, H = 560;              // canvas size (SVG pixels)
   const MARGIN = { top: 70, right: 180, bottom: 100, left: 175 }; // plot margins
@@ -30,15 +25,15 @@ module.exports = function() {
 
   const { svg, document } = makeSVG(W, H);
 
-  // DATA — loaded from data.json (edit that file to customise the figure)
-  const { data } = require('./data.json');
+  // DATA — loaded from data.js (edit that file to customise the figure)
+  const { data: chartData, misc } = data;
 
   const innerW = W - MARGIN.left - MARGIN.right;
   const innerH = H - MARGIN.top - MARGIN.bottom;
 
   const g = svg.append('g').attr('transform',`translate(${MARGIN.left},${MARGIN.top})`);
 
-  const yScale = d3.scaleBand().domain(data.map(d=>d.name)).range([0,innerH]).padding(0.3);
+  const yScale = d3.scaleBand().domain(chartData.map(d=>d.name)).range([0,innerH]).padding(0.3);
   const xScale = d3.scaleLinear().domain([0,60]).range([0,innerW]);
 
   // Light gridlines
@@ -54,7 +49,7 @@ module.exports = function() {
     .attr('stroke',S.GRAY_LIGHT).attr('stroke-width',1);
 
   // Bars
-  data.forEach(d => {
+  chartData.forEach(d => {
     const y = yScale(d.name), bh = yScale.bandwidth(), bw = xScale(d.months);
     const isChatGPT = d.name === 'ChatGPT';
 
@@ -75,7 +70,7 @@ module.exports = function() {
       .attr('dominant-baseline','middle')
       .attr('font-family',S.FONT).attr('font-size',FONT_BAR_LABEL).attr('font-weight',700)
       .attr('fill', isChatGPT ? S.RED : S.GRAY_DARK)
-      .text(`${d.months} ${d.months===1?'mes':'meses'}`);
+      .text(`${d.months} ${d.months===1?misc.month_singular:misc.month_plural}`);
 
     // App name on left axis
     g.append('text').attr('x',-NAME_OFFSET_X).attr('y',y+bh/2-NAME_OFFSET_Y)
@@ -100,7 +95,7 @@ module.exports = function() {
   g.append('text').attr('x',innerW/2).attr('y',innerH+AXIS_TITLE_Y)
     .attr('text-anchor','middle')
     .attr('font-family',S.FONT).attr('font-size',FONT_AXIS_TITLE).attr('fill',S.GRAY)
-    .text('Meses para alcanzar 100 millones de usuarios');
+    .text(misc.axis_title);
 
   // Comparison annotation: ChatGPT vs TikTok
   const chatY = yScale('ChatGPT') + yScale.bandwidth()/2;
@@ -115,10 +110,10 @@ module.exports = function() {
   const midBracketY = (chatY + tikY) / 2;
   g.append('text').attr('x',bx+BRACKET_LABEL_OFFSET_X).attr('y',midBracketY+BRACKET_LABEL_Y1)
     .attr('font-family',S.FONT).attr('font-size',FONT_BRACKET).attr('font-weight',700)
-    .attr('fill',S.RED).text('4,5× más');
+    .attr('fill',S.RED).text(misc.bracket_line1);
   g.append('text').attr('x',bx+BRACKET_LABEL_OFFSET_X).attr('y',midBracketY+BRACKET_LABEL_Y2)
     .attr('font-family',S.FONT).attr('font-size',FONT_BRACKET).attr('font-weight',700)
-    .attr('fill',S.RED).text('rápido');
+    .attr('fill',S.RED).text(misc.bracket_line2);
 
   return document.body.innerHTML;
 };

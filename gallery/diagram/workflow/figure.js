@@ -1,9 +1,4 @@
-'use strict';
-const { makeSVG, addMarker } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function() {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
   // ── Layout ──────────────────────────────────────────────────────────────
   const W = 1000, H = 540;             // canvas size (SVG pixels)
   const BW = 185;                      // box width (wide enough for title font 20, longest title ≈180px)
@@ -24,8 +19,8 @@ module.exports = function() {
 
   const { svg, document } = makeSVG(W, H);
 
-  // DATA — loaded from data.json (edit that file to customise the figure)
-  const { steps } = require('./data.json');
+  // DATA — loaded from data.js (edit that file to customise the figure)
+  const { steps } = data;
 
   const totalW = steps.length * BW + (steps.length - 1) * GAP;
   const startX = (W - totalW) / 2;

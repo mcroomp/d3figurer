@@ -1,9 +1,4 @@
-'use strict';
-const { makeSVG } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function () {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
 
   // ── Layout ────────────────────────────────────────────────────────────────
   const W = 1000, H = 700;         // canvas size
@@ -28,8 +23,8 @@ module.exports = function () {
 
   const { svg, document } = makeSVG(W, H);
 
-  // DATA — loaded from data.json (edit that file to customise the figure)
-  const { rawData } = require('./data.json');
+  // DATA — loaded from data.js (edit that file to customise the figure)
+  const { rawData, misc } = data;
 
   const cpuData = rawData
     .filter(d => d.cat === 'CPU' && d.year >= 2000)
@@ -61,7 +56,7 @@ module.exports = function () {
     .attr('text-anchor', 'start')
     .attr('font-family', S.FONT).attr('font-size', 22).attr('font-weight', 700)
     .attr('fill', S.RED).attr('opacity', 0.75)
-    .text('Era LLMs');
+    .text(misc.era_llms);
 
   // Y gridlines & tick labels
   const yTickValues = [0, 50e9, 100e9, 150e9, 200e9];
@@ -114,7 +109,7 @@ module.exports = function () {
     .attr('transform', `translate(${Y_LABEL_X}, ${(y0 + y1) / 2}) rotate(-90)`)
     .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
     .attr('font-family', S.FONT).attr('font-size', 22).attr('fill', S.GRAY)
-    .text('Miles de millones de transistores');
+    .text(misc.y_axis_label);
 
   // Log-linear regression
   function logReg(pts) {
@@ -235,7 +230,7 @@ module.exports = function () {
     .attr('x', LX + 38).attr('y', LY + 14)
     .attr('dominant-baseline', 'middle')
     .attr('font-family', S.FONT).attr('font-size', 22).attr('fill', S.GRAY_DARK)
-    .text('CPUs (Intel \u0026 AMD)');
+    .text(misc.legend_cpu);
 
   // Row 2: AI accelerators
   svg.append('line')
@@ -248,7 +243,7 @@ module.exports = function () {
     .attr('x', LX + 38).attr('y', LY + 50)
     .attr('dominant-baseline', 'middle')
     .attr('font-family', S.FONT).attr('font-size', 22).attr('fill', S.RED)
-    .text('Aceleradoras IA / GPUs');
+    .text(misc.legend_ai);
 
   // Row 3: LLM era swatch
   svg.append('rect')
@@ -258,7 +253,7 @@ module.exports = function () {
     .attr('x', LX + 38).attr('y', LY + 85)
     .attr('dominant-baseline', 'middle')
     .attr('font-family', S.FONT).attr('font-size', 22).attr('fill', S.GRAY_DARK)
-    .text('Era LLMs (desde 2022)');
+    .text(misc.legend_era);
 
   return document.body.innerHTML;
 };

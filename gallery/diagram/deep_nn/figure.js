@@ -1,9 +1,4 @@
-'use strict';
-const { makeSVG } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function() {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
   // ── Layout ──────────────────────────────────────────────────────────────
   const W = 1000, H = 620;               // canvas size (SVG pixels)
   const R = 16;                           // node circle radius
@@ -19,8 +14,8 @@ module.exports = function() {
 
   const { svg, document } = makeSVG(W, H);
 
-  // DATA — loaded from data.json (edit that file to customise the figure)
-  const { layers } = require('./data.json');
+  // DATA — loaded from data.js (edit that file to customise the figure)
+  const { layers, misc } = data;
 
   function nodeYs(n) {
     const spacing = Math.min(58, 360 / Math.max(n - 1, 1));
@@ -62,14 +57,17 @@ module.exports = function() {
       .text(layer.label);
   });
 
-  // Sublabels below — data-skip-check: adjacent sublabels at same y are intentionally close
+  // Sublabels below — rendered as two tspan lines so adjacent labels don't crowd each other
+  const LINE_H = Math.round(FONT_SUBLABEL * 1.25);  // line height between tspan rows
   layers.forEach(layer => {
-    svg.append('text').attr('x', layer.cx).attr('y', LABEL_Y_BOT)
-      .attr('data-skip-check', '1')
+    const lines = Array.isArray(layer.sub) ? layer.sub : [layer.sub];
+    const t = svg.append('text').attr('x', layer.cx).attr('y', LABEL_Y_BOT)
       .attr('text-anchor','middle')
       .attr('font-family', S.FONT).attr('font-size', FONT_SUBLABEL).attr('font-style','italic')
-      .attr('fill', S.TEXT_LIGHT)
-      .text(layer.sub);
+      .attr('fill', S.TEXT_LIGHT);
+    lines.forEach((line, i) => {
+      t.append('tspan').attr('x', layer.cx).attr('dy', i === 0 ? 0 : LINE_H).text(line);
+    });
   });
 
   // Bracket/label "Capas Ocultas"
@@ -79,7 +77,7 @@ module.exports = function() {
   svg.append('text').attr('x', (bx1+bx2)/2).attr('y', BRACKET_TEXT_Y)
     .attr('text-anchor','middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_SUBLABEL)
-    .attr('fill', S.GRAY_MID).text('Capas Ocultas (aprendizaje profundo)');
+    .attr('fill', S.GRAY_MID).text(misc.bracket_label);
 
   // Input pixel grid
   [0,1,2].forEach(row => {

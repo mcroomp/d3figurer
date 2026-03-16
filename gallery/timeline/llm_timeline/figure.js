@@ -1,9 +1,4 @@
-'use strict';
-const { makeSVG } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function() {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
   // ── Layout ──────────────────────────────────────────────────────────────
   const W = 1000, H = 540;              // canvas size (SVG pixels)
   const TY = 260;                       // timeline axis y (centred higher to give space for labels above/below)
@@ -30,8 +25,8 @@ module.exports = function() {
 
   const { svg, document } = makeSVG(W, H);
 
-  // DATA — loaded from data.json (edit that file to customise the figure)
-  const { events } = require('./data.json');
+  // DATA — loaded from data.js (edit that file to customise the figure)
+  const { events, misc } = data;
 
   // Timeline background gradient strip
   const defs = svg.append('defs');
@@ -49,7 +44,7 @@ module.exports = function() {
 
   svg.append('text').attr('x', X2-8).attr('y', ACCEL_LABEL_Y)
     .attr('text-anchor', 'end')
-    .attr('font-family', S.FONT).attr('font-size', FONT_ACCEL).attr('fill', S.RED).text('Aceleración →');
+    .attr('font-family', S.FONT).attr('font-size', FONT_ACCEL).attr('fill', S.RED).text(misc.accel_label);
 
   events.forEach(ev => {
     const isAbove = ev.dir === 'above';
@@ -99,7 +94,7 @@ module.exports = function() {
     .attr('text-anchor','middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_BOTTOM).attr('font-style','italic')
     .attr('fill', S.GRAY)
-    .text('En 2023 aparecieron más modelos nuevos que en los 6 años anteriores');
+    .text(misc.bottom_caption);
 
   return document.body.innerHTML;
 };

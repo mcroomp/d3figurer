@@ -1,9 +1,4 @@
-'use strict';
-const { makeSVG } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function() {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
   // ── Layout ────────────────────────────────────────────────────────────────
   const W = 920, H = 580;              // canvas size in SVG pixels
   const WY = 310;                      // word row y centre
@@ -22,8 +17,8 @@ module.exports = function() {
 
   const { svg, document } = makeSVG(W, H);
 
-  // DATA — loaded from data.json (edit that file to customise the figure)
-  const { words, attentionFrom } = require('./data.json');
+  // DATA — loaded from data.js (edit that file to customise the figure)
+  const { words, attentionFrom, misc } = data;
 
   // Attention arcs
   const sourceWord = words.find(w => w.text === 'él');
@@ -74,45 +69,45 @@ module.exports = function() {
   svg.append('text').attr('x', 140).attr('y', WY-196)
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_ANNOTATION).attr('font-weight', 700)
-    .attr('fill', S.RED).text('Alta atención (72%)');
+    .attr('fill', S.RED).text(misc.high_attention);
   svg.append('text').attr('x', 140).attr('y', WY-162)
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_SUBTITLE).attr('font-style','italic')
-    .attr('fill', S.RED_DARK).text('"él" se refiere a "gato"');
+    .attr('fill', S.RED_DARK).text(misc.annotation_sub);
 
   // Bottom note
   svg.append('text').attr('x', W/2).attr('y', 402)
     .attr('text-anchor','middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_SUBTITLE)
     .attr('fill', S.GRAY_DARK)
-    .text('El modelo identifica que «él» se refiere a «gato» — no a «ratón» — resolviendo la ambigüedad');
+    .text(misc.bottom_note);
 
   // IN / OUT labels
   svg.append('text').attr('x', IN_X).attr('y', IN_Y)
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_IN_OUT).attr('font-weight', 700)
-    .attr('fill', S.GRAY_MID).text('IN');
+    .attr('fill', S.GRAY_MID).text(misc.in_label);
 
   svg.append('text').attr('x', OUT_X).attr('y', OUT_Y)
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_IN_OUT).attr('font-weight', 700)
-    .attr('fill', S.GRAY_MID).text('OUT');
+    .attr('fill', S.GRAY_MID).text(misc.out_label);
 
   // Legend for arc thickness — items are intentionally stacked; data-skip-check suppresses false TOO CLOSE flags
   svg.append('text').attr('x', lx).attr('y', ly)
     .attr('data-skip-check', '1')
     .attr('font-family', S.FONT).attr('font-size', FONT_LEGEND).attr('font-weight', 700)
-    .attr('fill', S.TEXT_LIGHT).text('Grosor del arco = peso de atención');
+    .attr('fill', S.TEXT_LIGHT).text(misc.legend_title);
   svg.append('line').attr('x1', lx).attr('y1', ly+18).attr('x2', lx+66).attr('y2', ly+18)
     .attr('stroke', S.RED).attr('stroke-width', 8).attr('opacity', 0.7);
   svg.append('text').attr('x', lx+72).attr('y', ly+22)
     .attr('data-skip-check', '1')
-    .attr('font-family', S.FONT).attr('font-size', FONT_LEGEND).attr('fill', S.TEXT_LIGHT).text('alta');
+    .attr('font-family', S.FONT).attr('font-size', FONT_LEGEND).attr('fill', S.TEXT_LIGHT).text(misc.legend_high);
   svg.append('line').attr('x1', lx).attr('y1', ly+40).attr('x2', lx+66).attr('y2', ly+40)
     .attr('stroke', S.GRAY_MID).attr('stroke-width', 1.5).attr('opacity', 0.5);
   svg.append('text').attr('x', lx+72).attr('y', ly+44)
     .attr('data-skip-check', '1')
-    .attr('font-family', S.FONT).attr('font-size', FONT_LEGEND).attr('fill', S.TEXT_LIGHT).text('baja');
+    .attr('font-family', S.FONT).attr('font-size', FONT_LEGEND).attr('fill', S.TEXT_LIGHT).text(misc.legend_low);
 
   return document.body.innerHTML;
 };

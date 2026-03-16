@@ -1,11 +1,6 @@
-'use strict';
-const { makeSVG } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function() {
-  // DATA — loaded from data.json (edit that file to customise the figure)
-  const { data } = require('./data.json');
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
+  // DATA — loaded from data.js (edit that file to customise the figure)
+  const { data: chartData, misc } = data;
 
   // ── Layout ────────────────────────────────────────────────────────────────
   const W      = 900;                                              // canvas width (px)
@@ -35,7 +30,7 @@ module.exports = function() {
 
   const g = svg.append('g').attr('transform',`translate(${MARGIN.left},${MARGIN.top})`);
 
-  const yScale = d3.scaleBand().domain(data.map(d=>d.country)).range([0,innerH]).padding(0.3);
+  const yScale = d3.scaleBand().domain(chartData.map(d=>d.country)).range([0,innerH]).padding(0.3);
   const xScale = d3.scaleLinear().domain([0, 9]).range([0, innerW]);
 
   // Gridlines
@@ -51,7 +46,7 @@ module.exports = function() {
     .attr('stroke',S.GRAY_MID).attr('stroke-width',1);
 
   // Dumbbell rows
-  data.forEach(d => {
+  chartData.forEach(d => {
     const cy = yScale(d.country) + yScale.bandwidth()/2;
     const x1 = xScale(d.base);
     const x2 = xScale(d.total);
@@ -100,17 +95,17 @@ module.exports = function() {
   g.append('text').attr('x',innerW/2).attr('y',innerH+60)
     .attr('text-anchor','middle')
     .attr('font-family',S.FONT).attr('font-size',FONT_AXIS_LABEL).attr('fill',S.GRAY)
-    .text('Crecimiento acumulado del PIB 2025–2035 (%)');
+    .text(misc.x_axis_label);
 
   // Legend
   g.append('circle').attr('cx',LEG_X+8).attr('cy',LEG_Y+8).attr('r',BASE_DOT_R)
     .attr('fill',S.WHITE).attr('stroke',S.GRAY_MID).attr('stroke-width',2);
   g.append('text').attr('x',LEG_X+22).attr('y',LEG_Y+8).attr('dominant-baseline','middle')
-    .attr('font-family',S.FONT).attr('font-size',FONT_ANN).attr('fill',S.TEXT).text('Sin adopción de IA');
+    .attr('font-family',S.FONT).attr('font-size',FONT_ANN).attr('fill',S.TEXT).text(misc.legend_without);
   g.append('circle').attr('cx',LEG_X+8).attr('cy',LEG_Y+36).attr('r',DOT_R)
     .attr('fill','#cc3355');
   g.append('text').attr('x',LEG_X+22).attr('y',LEG_Y+36).attr('dominant-baseline','middle')
-    .attr('font-family',S.FONT).attr('font-size',FONT_ANN).attr('fill',S.TEXT).text('Con adopción de IA');
+    .attr('font-family',S.FONT).attr('font-size',FONT_ANN).attr('fill',S.TEXT).text(misc.legend_with);
 
   // Annotation box — ensure it stays within chart area, well padded
   const annX = xScale(ANN_AT_X);
@@ -120,11 +115,11 @@ module.exports = function() {
   g.append('text').attr('x',annX+ANN_W/2).attr('y',annY+ANN_TEXT_DY[0])
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family',S.FONT).attr('font-size',FONT_ANN).attr('font-weight',700)
-    .attr('fill',S.RED).text('La IA puede doblar');
+    .attr('fill',S.RED).text(misc.annotation_line1);
   g.append('text').attr('x',annX+ANN_W/2).attr('y',annY+ANN_TEXT_DY[1])
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family',S.FONT).attr('font-size',FONT_ANN).attr('font-weight',700)
-    .attr('fill',S.RED).text('el crecimiento económico');
+    .attr('fill',S.RED).text(misc.annotation_line2);
 
   return document.body.innerHTML;
 };

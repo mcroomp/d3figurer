@@ -1,9 +1,4 @@
-'use strict';
-const { makeSVG, addMarker } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function () {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
   // ── Layout ──────────────────────────────────────────────────────────────
   // Adjust these to reposition/resize elements without reading render code.
   const W = 800, H = 460;                  // canvas size (SVG pixels)
@@ -61,6 +56,8 @@ module.exports = function () {
   const BOTTOM_LABEL_FONT = 23;           // font size of the bottom label
   // ────────────────────────────────────────────────────────────────────────
 
+  const { misc } = data;
+
   const { svg, document } = makeSVG(W, H);
   S.fontStyle(svg);
 
@@ -77,7 +74,7 @@ module.exports = function () {
     .attr('font-family', S.FONT)
     .attr('font-size', HEADER_FONT)
     .attr('fill', S.TEXT_LIGHT)
-    .text('Entradas');
+    .text(misc.col_inputs);
 
   // Connection lines
   INPUT_CYS.forEach(cy => {
@@ -114,7 +111,7 @@ module.exports = function () {
     .attr('font-family', S.FONT)
     .attr('font-size', HEADER_FONT)
     .attr('fill', S.TEXT_LIGHT)
-    .text('Pesos');
+    .text(misc.col_weights);
 
   WEIGHT_YS.forEach((wy, i) => {
     svg.append('text')
@@ -134,7 +131,7 @@ module.exports = function () {
     .attr('font-family', S.FONT)
     .attr('font-size', HEADER_FONT)
     .attr('fill', S.TEXT_LIGHT)
-    .text('Neurona');
+    .text(misc.col_neuron);
 
   // Outer circle
   svg.append('circle')
@@ -163,7 +160,7 @@ module.exports = function () {
     .attr('font-size', NEURON_SUBLABEL_FONT)
     .attr('font-style', 'italic')
     .attr('fill', S.TEXT_LIGHT)
-    .text('Neurona');
+    .text(misc.neuron_sublabel);
 
   // Connector line: neuron right edge → activation box
   svg.append('line')
@@ -199,7 +196,7 @@ module.exports = function () {
     .attr('font-family', S.FONT)
     .attr('font-size', ACT_LABEL_FONT)
     .attr('fill', S.TEXT_LIGHT)
-    .text('Función de');
+    .text(misc.activation_line1);
 
   svg.append('text')
     .attr('x', ACT_CX).attr('y', ACT_LABEL_Y2)
@@ -208,7 +205,7 @@ module.exports = function () {
     .attr('font-family', S.FONT)
     .attr('font-size', ACT_LABEL_FONT)
     .attr('fill', S.TEXT_LIGHT)
-    .text('Activación');
+    .text(misc.activation_line2);
 
   // Column header "Salida"
   svg.append('text')
@@ -217,7 +214,7 @@ module.exports = function () {
     .attr('font-family', S.FONT)
     .attr('font-size', HEADER_FONT)
     .attr('fill', S.TEXT_LIGHT)
-    .text('Salida');
+    .text(misc.col_output);
 
   // Arrow from activation box to output
   svg.append('line')
@@ -235,7 +232,7 @@ module.exports = function () {
     .attr('font-weight', 700)
     .attr('fill', S.RED)
     .attr('text-anchor', 'middle')
-    .text('1');
+    .text(misc.output_1);
 
   svg.append('text')
     .attr('x', OUTPUT_SIDE_X).attr('y', OUTPUT_1_Y)
@@ -243,7 +240,7 @@ module.exports = function () {
     .attr('font-family', S.FONT)
     .attr('font-size', OUTPUT_SIDE_FONT)
     .attr('fill', S.GRAY_DARK)
-    .text('Activa');
+    .text(misc.output_active);
 
   // Separator
   svg.append('line')
@@ -260,7 +257,7 @@ module.exports = function () {
     .attr('font-weight', 700)
     .attr('fill', S.GRAY_MID)
     .attr('text-anchor', 'middle')
-    .text('0');
+    .text(misc.output_0);
 
   svg.append('text')
     .attr('x', OUTPUT_SIDE_X).attr('y', OUTPUT_0_Y)
@@ -268,7 +265,7 @@ module.exports = function () {
     .attr('font-family', S.FONT)
     .attr('font-size', OUTPUT_SIDE_FONT)
     .attr('fill', S.GRAY_DARK)
-    .text('No activa');
+    .text(misc.output_inactive);
 
   // Bottom label
   svg.append('text')
@@ -277,7 +274,7 @@ module.exports = function () {
     .attr('font-family', S.FONT)
     .attr('font-size', BOTTOM_LABEL_FONT)
     .attr('fill', S.GRAY_DARK)
-    .text('Perceptrón');
+    .text(misc.bottom_label);
 
   return document.body.innerHTML;
 };

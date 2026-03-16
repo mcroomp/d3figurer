@@ -1,0 +1,90 @@
+globalThis.__d3fig_data = {
+  "EQ_ROWS": [
+    {
+      "a": "0",
+      "b": "0",
+      "result": "0"
+    },
+    {
+      "a": "0",
+      "b": "1",
+      "result": "1"
+    },
+    {
+      "a": "1",
+      "b": "0",
+      "result": "1"
+    },
+    {
+      "a": "1",
+      "b": "1",
+      "result": "0"
+    }
+  ],
+  "POINTS": [
+    {
+      "cx": 524,
+      "cy": 338,
+      "isOne": false
+    },
+    {
+      "cx": 524,
+      "cy": 132,
+      "isOne": true
+    },
+    {
+      "cx": 758,
+      "cy": 338,
+      "isOne": true
+    },
+    {
+      "cx": 758,
+      "cy": 132,
+      "isOne": false
+    }
+  ],
+  "FAILED_LINES": [
+    {
+      "x1": 468,
+      "y1": 378,
+      "x2": 780,
+      "y2": 98
+    },
+    {
+      "x1": 468,
+      "y1": 238,
+      "x2": 790,
+      "y2": 238
+    },
+    {
+      "x1": 630,
+      "y1": 84,
+      "x2": 630,
+      "y2": 394
+    }
+  ],
+  "X_MARKS": [
+    {
+      "x": 770,
+      "y": 116
+    },
+    {
+      "x": 775,
+      "y": 248
+    },
+    {
+      "x": 630,
+      "y": 100
+    }
+  ],
+  "misc": {
+    "left_title": "Operación XOR",
+    "op_label": "XOR",
+    "right_title": "¿Existe una línea separadora?",
+    "axis_a": "Entrada A",
+    "axis_b": "Entrada B",
+    "footer_line1": "Ninguna línea recta puede separar",
+    "footer_prefix": "los ",
+    "footer_connector": " de los "
+  }
+};

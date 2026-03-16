@@ -1,12 +1,3 @@
-'use strict';
-const { makeSVG } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-// country-flag-icons/string/3x2 — SVG strings keyed by ISO 3166-1 alpha-2
-// Falls back gracefully to code badges in browser preview (where require is shimmed)
-let FLAGS = {};
-try { FLAGS = require('country-flag-icons/string/3x2'); } catch (_) {}
 
 // Custom SVGs for non-ISO entities (OECD, UN, UNESCO).
 // These are purpose-built for the 70×47 card size (viewBox 3:2).
@@ -34,10 +25,12 @@ const CUSTOM_FLAGS = {
       + '</svg>',
 };
 
-module.exports = function () {
-  // DATA — loaded from data.json (edit that file to customise the figure)
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
+  // country-flag-icons/string/3x2 — SVG strings keyed by ISO 3166-1 alpha-2
+  const FLAGS = (assets && assets.flags) || {};
+  // DATA — loaded from data.js (edit that file to customise the figure)
   // Sources: OECD Progress Report 2025, World Privacy Forum, CCIA, Tim Dutton
-  const { strategies } = require('./data.json');
+  const { strategies, misc } = data;
 
   // ── Append a flag as a nested <svg> (no base64, works in jsdom + browser) ──
   // Uniquifies internal SVG ids with a per-call prefix to prevent conflicts
@@ -222,7 +215,7 @@ module.exports = function () {
     .attr('text-anchor', 'start')
     .attr('font-family', S.FONT).attr('font-size', FONT_MARKER).attr('font-weight', 700)
     .attr('fill', S.RED).attr('opacity', 0.75)
-    .text('IA Generativa \u2192');
+    .text(misc.gen_ai_marker);
 
   return document.body.innerHTML;
 };

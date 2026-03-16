@@ -1,9 +1,4 @@
-'use strict';
-const { makeSVG, addMarker, addText } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function() {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
 
   // ── Layout ────────────────────────────────────────────────────────────────
   const W = 980, H = 900;          // canvas size
@@ -57,6 +52,9 @@ module.exports = function() {
 
   const { svg, document } = makeSVG(W, H);
 
+  // DATA — loaded from data.js (edit that file to customise the figure)
+  const { tools, misc } = data;
+
   // ── Defs ──────────────────────────────────────────────────────────────────
   const defs = svg.append('defs');
   addMarker(defs, 'ag', S.GRAY_MID);
@@ -91,67 +89,67 @@ module.exports = function() {
   }
 
   // ── USUARIO ────────────────────────────────────────────────────────────────
-  rect(USER_X, USER_Y, USER_W, USER_H, S.GRAY_LIGHT, S.GRAY_MID, 1.5, null, 8);
-  addText(svg, CX, USER_Y + 24, 'Usuario', 28, 700, S.GRAY_DARK);
-  addText(svg, CX, USER_Y + 56, 'Objetivo / Solicitud', 20, 400, S.TEXT_LIGHT, 'middle', true);
+  rect(USER_X, USER_Y, USER_W, USER_H, S.GRAY_LIGHT, S.GRAY_MID, 1.5, null, 8).attr('data-box', 'usuario');
+  addText(svg, CX, USER_Y + 24, misc.user_label, 28, 700, S.GRAY_DARK).attr('data-inside', 'usuario');
+  addText(svg, CX, USER_Y + 56, misc.user_sublabel, 20, 400, S.TEXT_LIGHT, 'middle', true).attr('data-inside', 'usuario');
 
   // Down arrow
   line(CX - 10, ARROW_Y_TOP, CX - 10, ARROW_Y_BOT, S.GRAY_MID, 2, null, 'ag');
-  addText(svg, CX - 22, 132, 'objetivo', 18, 400, S.GRAY_MID, 'end', true);
+  addText(svg, CX - 22, 132, misc.arrow_down, 18, 400, S.GRAY_MID, 'end', true);
 
   // Dashed red arrow up
   svg.append('path')
     .attr('d', `M ${CX + 10},${ARROW_Y_BOT} L ${CX + 10},${ARROW_Y_TOP}`)
     .attr('fill', 'none').attr('stroke', S.RED).attr('stroke-width', 1.5)
     .attr('stroke-dasharray', '5,3').attr('marker-end', 'url(#ar)');
-  addText(svg, CX + 22, 132, 'respuesta', 18, 400, S.RED, 'start', true);
+  addText(svg, CX + 22, 132, misc.arrow_up, 18, 400, S.RED, 'start', true);
 
   // ── AGENT CONTAINER ────────────────────────────────────────────────────────
   rect(AGENT_X, AGENT_Y, AGENT_W, AGENT_H, S.WHITE, S.RED, 1.5, '7,4', 10);
-  addText(svg, AGENT_X + 22, AGENT_Y + 20, 'A G E N T E', 22, 700, S.RED, 'start');
+  addText(svg, AGENT_X + 22, AGENT_Y + 20, misc.agent_label, 22, 700, S.RED, 'start');
 
   // ── MEMORIA sidebar (left) ─────────────────────────────────────────────────
-  rect(MX, MY, MW, MH, '#fef7f8', S.RED, 1.5, '5,3', 8);
-  addText(svg, MX + MW / 2, MY + 28, 'Memoria', 24, 700, S.RED);
+  rect(MX, MY, MW, MH, '#fef7f8', S.RED, 1.5, '5,3', 8).attr('data-box', 'memoria');
+  addText(svg, MX + MW / 2, MY + 28, misc.memory_title, 24, 700, S.RED).attr('data-inside', 'memoria');
 
   // Short-term sub-box — 22px spacing (was 18) for font-17 items to have 5px gap
-  rect(MX + 8, MY + 52, MW - 16, 164, S.GRAY_LIGHT, 'none', 0, null, 5);
-  addText(svg, MX + MW / 2, MY + 80, 'Corto plazo', 22, 700, S.GRAY_DARK).attr('data-skip-check', '1');
-  addText(svg, MX + MW / 2, MY + 104, 'Contexto activo', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
-  addText(svg, MX + MW / 2, MY + 126, 'Conversación actual', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
-  addText(svg, MX + MW / 2, MY + 148, 'Instrucciones del', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
-  addText(svg, MX + MW / 2, MY + 170, 'sistema (system prompt)', 16, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
+  rect(MX + 8, MY + 52, MW - 16, 164, S.GRAY_LIGHT, 'none', 0, null, 5).attr('data-box', 'mem-short');
+  addText(svg, MX + MW / 2, MY + 80, misc.memory_short_title, 22, 700, S.GRAY_DARK).attr('data-skip-check', '1').attr('data-inside', 'mem-short');
+  addText(svg, MX + MW / 2, MY + 104, misc.memory_short_1, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'mem-short');
+  addText(svg, MX + MW / 2, MY + 126, misc.memory_short_2, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'mem-short');
+  addText(svg, MX + MW / 2, MY + 148, misc.memory_short_3, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'mem-short');
+  addText(svg, MX + MW / 2, MY + 170, misc.memory_short_4, 16, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'mem-short');
 
   // Long-term sub-box — 22px spacing (was 18)
-  rect(MX + 8, MY + 230, MW - 16, 164, S.GRAY_LIGHT, 'none', 0, null, 5);
-  addText(svg, MX + MW / 2, MY + 258, 'Largo plazo', 22, 700, S.GRAY_DARK).attr('data-skip-check', '1');
-  addText(svg, MX + MW / 2, MY + 282, 'Historial de sesiones', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
-  addText(svg, MX + MW / 2, MY + 304, 'Memoria semántica', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
-  addText(svg, MX + MW / 2, MY + 326, 'Episodios pasados', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
-  addText(svg, MX + MW / 2, MY + 348, 'Perfil de usuario', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
+  rect(MX + 8, MY + 230, MW - 16, 164, S.GRAY_LIGHT, 'none', 0, null, 5).attr('data-box', 'mem-long');
+  addText(svg, MX + MW / 2, MY + 258, misc.memory_long_title, 22, 700, S.GRAY_DARK).attr('data-skip-check', '1').attr('data-inside', 'mem-long');
+  addText(svg, MX + MW / 2, MY + 282, misc.memory_long_1, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'mem-long');
+  addText(svg, MX + MW / 2, MY + 304, misc.memory_long_2, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'mem-long');
+  addText(svg, MX + MW / 2, MY + 326, misc.memory_long_3, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'mem-long');
+  addText(svg, MX + MW / 2, MY + 348, misc.memory_long_4, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'mem-long');
 
   // Dashed connector: memory → LLM
   line(MX + MW, MY + 200, 360, MY + 200, S.RED, 1, '4,3');
 
   // ── CONOCIMIENTO sidebar (right) ───────────────────────────────────────────
-  rect(KX, KY, KW, KH, '#fef7f8', S.RED, 1.5, '5,3', 8);
-  addText(svg, KX + KW / 2, KY + 28, 'Conocimiento', 24, 700, S.RED);
+  rect(KX, KY, KW, KH, '#fef7f8', S.RED, 1.5, '5,3', 8).attr('data-box', 'conocimiento');
+  addText(svg, KX + KW / 2, KY + 28, misc.knowledge_title, 24, 700, S.RED).attr('data-inside', 'conocimiento');
 
   // RAG sub-box — 22px spacing (was 18)
-  rect(KX + 8, KY + 52, KW - 16, 164, S.GRAY_LIGHT, 'none', 0, null, 5);
-  addText(svg, KX + KW / 2, KY + 80, 'RAG', 22, 700, S.GRAY_DARK).attr('data-skip-check', '1');
-  addText(svg, KX + KW / 2, KY + 104, 'Recuperación semántica', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
-  addText(svg, KX + KW / 2, KY + 126, 'vectorial de textos', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
-  addText(svg, KX + KW / 2, KY + 148, 'Búsqueda híbrida', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
-  addText(svg, KX + KW / 2, KY + 170, 'en documentos propios', 16, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
+  rect(KX + 8, KY + 52, KW - 16, 164, S.GRAY_LIGHT, 'none', 0, null, 5).attr('data-box', 'con-rag');
+  addText(svg, KX + KW / 2, KY + 80, misc.rag_title, 22, 700, S.GRAY_DARK).attr('data-skip-check', '1').attr('data-inside', 'con-rag');
+  addText(svg, KX + KW / 2, KY + 104, misc.rag_1, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'con-rag');
+  addText(svg, KX + KW / 2, KY + 126, misc.rag_2, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'con-rag');
+  addText(svg, KX + KW / 2, KY + 148, misc.rag_3, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'con-rag');
+  addText(svg, KX + KW / 2, KY + 170, misc.rag_4, 16, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'con-rag');
 
   // Docs sub-box — 22px spacing (was 18)
-  rect(KX + 8, KY + 230, KW - 16, 164, S.GRAY_LIGHT, 'none', 0, null, 5);
-  addText(svg, KX + KW / 2, KY + 258, 'Documentos', 22, 700, S.GRAY_DARK).attr('data-skip-check', '1');
-  addText(svg, KX + KW / 2, KY + 282, 'Bases de datos', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
-  addText(svg, KX + KW / 2, KY + 304, 'Archivos propios', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
-  addText(svg, KX + KW / 2, KY + 326, 'Fuentes externas', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
-  addText(svg, KX + KW / 2, KY + 348, 'APIs de conocimiento', 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
+  rect(KX + 8, KY + 230, KW - 16, 164, S.GRAY_LIGHT, 'none', 0, null, 5).attr('data-box', 'con-docs');
+  addText(svg, KX + KW / 2, KY + 258, misc.docs_title, 22, 700, S.GRAY_DARK).attr('data-skip-check', '1').attr('data-inside', 'con-docs');
+  addText(svg, KX + KW / 2, KY + 282, misc.docs_1, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'con-docs');
+  addText(svg, KX + KW / 2, KY + 304, misc.docs_2, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'con-docs');
+  addText(svg, KX + KW / 2, KY + 326, misc.docs_3, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'con-docs');
+  addText(svg, KX + KW / 2, KY + 348, misc.docs_4, 17, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'con-docs');
 
   // Dashed connector: LLM → knowledge
   line(620, MY + 200, KX, MY + 200, S.RED, 1, '4,3');
@@ -160,30 +158,30 @@ module.exports = function() {
   // Phase boxes: x=360–620 (w=260), centred at CX=490
 
   // 1. PERCIBIR
-  rect(PHASE_X, P1_Y, PHASE_W, P1_H, S.GRAY_LIGHT, S.GRAY_MID, 1.5, null, 8);
+  rect(PHASE_X, P1_Y, PHASE_W, P1_H, S.GRAY_LIGHT, S.GRAY_MID, 1.5, null, 8).attr('data-box', 'phase1');
   badge(PHASE_X + 20, P1_Y + P1_H / 2, 1);
-  addText(svg, CX + 8, P1_Y + 34, 'Percibir', 26, 700, S.TEXT);
-  addText(svg, CX + 8, P1_Y + 64, 'Entrada y observaciones', 18, 400, S.GRAY, 'middle', true);
+  addText(svg, CX + 8, P1_Y + 34, misc.phase1_title, 26, 700, S.TEXT).attr('data-inside', 'phase1');
+  addText(svg, CX + 8, P1_Y + 64, misc.phase1_sub, 18, 400, S.GRAY, 'middle', true).attr('data-inside', 'phase1');
 
   line(CX, P1_Y + P1_H, CX, P1_Y + P1_H + PHASE_GAP, S.GRAY_MID, 2, null, 'ag');
 
   // 2. RAZONAR
   const p2y = P1_Y + P1_H + PHASE_GAP; // 302
-  rect(PHASE_X, p2y, PHASE_W, P2_H, 'url(#llmGrad)', 'none', 0, null, 10);
+  rect(PHASE_X, p2y, PHASE_W, P2_H, 'url(#llmGrad)', 'none', 0, null, 10).attr('data-box', 'phase2');
   badge(PHASE_X + 20, p2y + P2_H / 2, 2);
-  addText(svg, CX + 8, p2y + 32, 'Razonar · Planificar', 26, 700, S.WHITE);
-  addText(svg, CX + 8, p2y + 64, 'Modelo de Lenguaje LLM', 18, 400, 'rgba(255,255,255,0.88)', 'middle', true);
-  addText(svg, CX + 8, p2y + 90, 'Reflexión · Síntesis', 18, 400, 'rgba(255,255,255,0.72)', 'middle', true);
-  addText(svg, CX + 8, p2y + 116, 'Selección de acción', 18, 400, 'rgba(255,255,255,0.72)', 'middle', true);
+  addText(svg, CX + 8, p2y + 32, misc.phase2_title, 26, 700, S.WHITE).attr('data-inside', 'phase2');
+  addText(svg, CX + 8, p2y + 64, misc.phase2_sub1, 18, 400, 'rgba(255,255,255,0.88)', 'middle', true).attr('data-inside', 'phase2');
+  addText(svg, CX + 8, p2y + 90, misc.phase2_sub2, 18, 400, 'rgba(255,255,255,0.72)', 'middle', true).attr('data-inside', 'phase2');
+  addText(svg, CX + 8, p2y + 116, misc.phase2_sub3, 18, 400, 'rgba(255,255,255,0.72)', 'middle', true).attr('data-inside', 'phase2');
 
   line(CX, p2y + P2_H, CX, p2y + P2_H + PHASE_GAP, S.GRAY_MID, 2, null, 'ag');
 
   // 3. ACTUAR
   const p3y = p2y + P2_H + PHASE_GAP; // 506
-  rect(PHASE_X, p3y, PHASE_W, P3_H, '#fff5f7', S.RED, 1.5, null, 8);
+  rect(PHASE_X, p3y, PHASE_W, P3_H, '#fff5f7', S.RED, 1.5, null, 8).attr('data-box', 'phase3');
   badge(PHASE_X + 20, p3y + P3_H / 2, 3);
-  addText(svg, CX + 8, p3y + 34, 'Actuar', 26, 700, S.RED).attr('data-skip-check', '1');
-  addText(svg, CX + 8, p3y + 64, 'Llamada a herramienta', 19, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1');
+  addText(svg, CX + 8, p3y + 34, misc.phase3_title, 26, 700, S.RED).attr('data-skip-check', '1').attr('data-inside', 'phase3');
+  addText(svg, CX + 8, p3y + 64, misc.phase3_sub, 19, 400, S.GRAY, 'middle', true).attr('data-skip-check', '1').attr('data-inside', 'phase3');
 
   // ── OBSERVE loop-back (right gap) ─────────────────────────────────────────
   svg.append('path')
@@ -197,24 +195,22 @@ module.exports = function() {
     .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
     .attr('font-family', S.FONT).attr('font-size', 18).attr('font-style', 'italic')
     .attr('fill', S.GRAY_MID)
-    .text('observaciones');
+    .text(misc.loop_label);
 
   // ── ACTUAR → TOOLS arrow ───────────────────────────────────────────────────
   line(CX, p3y + P3_H, CX, 682, S.RED, 2, null, 'ar');
-  addText(svg, CX + 10, 652, 'acciones', 18, 400, S.RED, 'start', true);
+  addText(svg, CX + 10, 652, misc.actions_label, 18, 400, S.RED, 'start', true);
 
   // ── HERRAMIENTAS ──────────────────────────────────────────────────────────
-  addText(svg, CX, TOOLS_LABEL_Y, 'H E R R A M I E N T A S', 20, 700, S.GRAY_MID);
-
-  // DATA — loaded from data.json (edit that file to customise the figure)
-  const { tools } = require('./data.json');
+  addText(svg, CX, TOOLS_LABEL_Y, misc.tools_title, 20, 700, S.GRAY_MID);
 
   tools.forEach((t, i) => {
     const tx = TOOL_START_X + i * (TOOL_W + TOOL_GAP);
     const tcx = tx + TOOL_W / 2;
-    rect(tx, TOOL_Y, TOOL_W, TOOL_H, S.GRAY_LIGHT, S.GRAY_MID, 1, null, 7);
-    addText(svg, tcx, TOOL_Y + 38, t.label, 18, 700, S.GRAY_DARK);  // was 22 — "Ejecución de Código" clips at 22
-    addText(svg, tcx, TOOL_Y + 66, t.sub, 16, 400, S.GRAY, 'middle', true);
+    const boxId = `tool-${i}`;
+    rect(tx, TOOL_Y, TOOL_W, TOOL_H, S.GRAY_LIGHT, S.GRAY_MID, 1, null, 7).attr('data-box', boxId);
+    addText(svg, tcx, TOOL_Y + 38, t.label, 18, 700, S.GRAY_DARK).attr('data-inside', boxId);  // was 22 — "Ejecución de Código" clips at 22
+    addText(svg, tcx, TOOL_Y + 66, t.sub, 16, 400, S.GRAY, 'middle', true).attr('data-inside', boxId);
   });
 
   return document.body.innerHTML;

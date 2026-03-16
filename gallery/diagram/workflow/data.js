@@ -1,4 +1,4 @@
-{
+globalThis.__d3fig_data = {
   "steps": [
     {
       "title": "Texto de entrada",
@@ -36,4 +36,4 @@
       "icon": "✓"
     }
   ]
-}
+};

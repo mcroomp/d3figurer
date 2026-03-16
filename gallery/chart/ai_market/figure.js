@@ -1,11 +1,6 @@
-'use strict';
-const { makeSVG } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function() {
-  // DATA — loaded from data.json (edit that file to customise the figure)
-  const { allData } = require('./data.json');
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
+  // DATA — loaded from data.js (edit that file to customise the figure)
+  const { allData, misc } = data;
 
   // ── Layout ────────────────────────────────────────────────────────────────
   const W      = 1000;                                        // canvas width (px)
@@ -92,7 +87,7 @@ module.exports = function() {
     .attr('stroke',S.GRAY_MID).attr('stroke-width',1.5).attr('stroke-dasharray','4,3');
   g.append('text').attr('x',divX+8).attr('y',-20).attr('text-anchor','start')
     .attr('font-family',S.FONT).attr('font-size',20).attr('fill',S.GRAY)
-    .text('Proyección →');
+    .text(misc.projection_label);
 
   // X axis labels
   [2016, 2018, 2020, 2022, 2024, 2026, 2028, 2030].forEach(yr => {
@@ -129,31 +124,31 @@ module.exports = function() {
   g.append('text').attr('x',ANN_CX).attr('y',ANN_Y1)
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family',S.FONT).attr('font-size',FONT_ANN_MAIN).attr('font-weight',700)
-    .attr('fill',S.RED).text('×175');
+    .attr('fill',S.RED).text(misc.growth_factor);
   g.append('text').attr('x',ANN_CX).attr('y',ANN_Y2)
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family',S.FONT).attr('font-size',FONT_ANN_SUB)
-    .attr('fill',S.RED_DARK).text('en 15 años (2016–2031)');
+    .attr('fill',S.RED_DARK).text(misc.growth_subtitle);
   g.append('text').attr('x',ANN_CX).attr('y',ANN_Y3)
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family',S.FONT).attr('font-size',FONT_ANN_NOTE).attr('font-style','italic')
-    .attr('fill',S.TEXT_LIGHT).text('Fuente: IDC / Statista 2025');
+    .attr('fill',S.TEXT_LIGHT).text(misc.source_note);
 
   // Y axis label
   g.append('text').attr('transform',`translate(-94,${innerH/2}) rotate(-90)`)
     .attr('text-anchor','middle')
     .attr('font-family',S.FONT).attr('font-size',FONT_AXIS_LABEL).attr('fill',S.GRAY)
-    .text('Miles de millones USD');
+    .text(misc.y_axis_label);
 
   // Legend
   svg.append('rect').attr('x',LEG_X).attr('y',LEG_Y-8).attr('width',18).attr('height',5).attr('fill',S.RED);
   svg.append('text').attr('x',LEG_X+22).attr('y',LEG_Y).attr('dominant-baseline','middle')
-    .attr('font-family',S.FONT).attr('font-size',FONT_LEGEND).attr('fill',S.TEXT).text('Datos históricos (2016–2025)');
+    .attr('font-family',S.FONT).attr('font-size',FONT_LEGEND).attr('fill',S.TEXT).text(misc.legend_historical);
   svg.append('rect').attr('x',LEG_X+310).attr('y',LEG_Y-8).attr('width',18).attr('height',5)
     .attr('fill',S.RED_LIGHT).attr('stroke-dasharray','none');
   svg.append('text').attr('x',LEG_X+332).attr('y',LEG_Y).attr('dominant-baseline','middle')
     .attr('font-family',S.FONT).attr('font-size',FONT_LEGEND).attr('fill',S.TEXT_LIGHT)
-    .text('Proyección (2026–2031)');
+    .text(misc.legend_projection);
 
   return document.body.innerHTML;
 };

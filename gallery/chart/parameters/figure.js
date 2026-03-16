@@ -1,9 +1,4 @@
-'use strict';
-const { makeSVG } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function() {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
   // ── Layout ────────────────────────────────────────────────────────────────
   const W = 900, H = 640;           // canvas size in SVG pixels
   const MODEL_POS = [               // GPT circle centres (x, y)
@@ -24,8 +19,8 @@ module.exports = function() {
 
   const { svg, document } = makeSVG(W, H);
 
-  // DATA — loaded from data.json (edit that file to customise the figure)
-  const { models } = require('./data.json');
+  // DATA — loaded from data.js (edit that file to customise the figure)
+  const { models, misc } = data;
 
   const maxParams = 175000;
   function paramR(p) { return Math.sqrt(p / maxParams) * maxR; }
@@ -71,7 +66,7 @@ module.exports = function() {
         .attr('data-skip-check', '1')
         .attr('text-anchor','middle').attr('dominant-baseline','middle')
         .attr('font-family', S.FONT).attr('font-size', FONT_INSIDE_UNIT).attr('font-style','italic')
-        .attr('fill', 'rgba(255,255,255,0.75)').text('parámetros');
+        .attr('fill', 'rgba(255,255,255,0.75)').text(misc.unit_label);
     } else {
       const lx = pos.cx + r + LABEL_DX;
       const ly = pos.cy;
@@ -96,7 +91,7 @@ module.exports = function() {
         .attr('data-skip-check', '1')
         .attr('text-anchor','start').attr('dominant-baseline','middle')
         .attr('font-family', S.FONT).attr('font-size', FONT_OUTSIDE_UNIT).attr('font-style','italic')
-        .attr('fill', S.GRAY).text('parámetros');
+        .attr('fill', S.GRAY).text(misc.unit_label);
     }
   });
 

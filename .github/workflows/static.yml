@@ -20,16 +20,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Make scripts executable
-        run: chmod +x server.sh test.sh
-
-      - name: Install dependencies (skip Chrome — not needed for unit tests)
-        run: PUPPETEER_SKIP_DOWNLOAD=true npm install
+        run: chmod +x server.sh test.sh dev.sh
 
       - name: Run unit tests
-        run: ./test.sh -v
+        run: PUPPETEER_SKIP_DOWNLOAD=true ./dev.sh test -v
 
   build-and-deploy:
     name: Render gallery and deploy to Pages
@@ -47,26 +44,23 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Make scripts executable
-        run: chmod +x server.sh mcp.sh setup_mcp.sh test.sh
-
-      - name: Install d3figurer dependencies
-        run: ./server.sh install
+        run: chmod +x server.sh mcp.sh setup_mcp.sh test.sh dev.sh
 
       - name: Start render server
-        run: ./server.sh start --src-dir gallery
+        run: ./dev.sh start
 
       - name: Render gallery
         run: |
-          NODE_PATH="$HOME/.d3figurer-work/d3figurer/node_modules" \
-          node bin/d3figurer.js batch gallery \
-            --src-dir gallery
+          (cd "$HOME/d3figurer-dev" && node bin/d3figurer.js batch \
+            "$GITHUB_WORKSPACE/gallery" \
+            --src-dir gallery)
 
       - name: Stop render server
         if: always()
-        run: ./server.sh stop
+        run: ./dev.sh stop
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

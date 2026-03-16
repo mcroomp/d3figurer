@@ -1,13 +1,8 @@
-'use strict';
-const { makeSVG } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
-module.exports = function () {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
   // ── Layout ──────────────────────────────────────────────────────────────
-  const W = 1100, H = 700;              // canvas size (SVG pixels)
-  const X_LEFT    = 65;                  // x coordinate of leftmost chart edge
-  const X_RIGHT   = 1075;               // x coordinate of rightmost chart edge
+  const W = 1200, H = 700;              // canvas size (SVG pixels)
+  const X_LEFT    = 90;                  // x coordinate of leftmost chart edge
+  const X_RIGHT   = 1140;               // x coordinate of rightmost chart edge
   const AREA_TOP  = 280;                // y of top edge of stacked area chart
   const AREA_BOT  = 620;                // y of bottom edge of stacked area chart
   const TIMELINE_Y = 280;              // y of horizontal timeline bar
@@ -24,14 +19,26 @@ module.exports = function () {
 
   const { svg, document } = makeSVG(W, H);
 
-  // DATA — loaded from data.json (edit that file to customise the figure)
-  const { events, areaData, areaLabels } = require('./data.json');
+  // DATA — loaded from data.js (edit that file to customise the figure)
+  const { events, areaData, areaLabels, misc } = data;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SCALES AND GEOMETRY (change xScale range or areaTop/Bottom to resize)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const xScale    = d3.scaleLinear().domain([1945, 2028]).range([X_LEFT, X_RIGHT]);
+  // Piecewise scale:
+  //   Pre-1945 (Ada Lovelace era): short linear section (PREAMBLE_WIDTH px)
+  //   1945–2028 (AI era): log scale, recent years expanded
+  const PREAMBLE_WIDTH = 120;
+  const LOG_START      = X_LEFT + PREAMBLE_WIDTH;  // x where AI-era log scale begins
+  const END_YEAR       = 2040;
+  const _xLog = d3.scaleLog()
+    .domain([END_YEAR - 2026, END_YEAR - 1945])  // [14, 95]
+    .range([X_RIGHT, LOG_START]);
+  const _xPre = d3.scaleLinear()
+    .domain([1843, 1945])
+    .range([X_LEFT, LOG_START]);
+  const xScale = year => year < 1945 ? _xPre(year) : _xLog(END_YEAR - year);
   const areaTop   = AREA_TOP;
   const areaBottom = AREA_BOT;
   const yScale    = d3.scaleLinear().domain([0, 100]).range([areaBottom, areaTop]);
@@ -108,7 +115,7 @@ module.exports = function () {
 
   // ── 4. X AXIS TICKS AND LABELS ────────────────────────────────────────────
 
-  [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020].forEach(yr => {
+  [1843, 1950, 1970, 1990, 2010, 2020, 2026].forEach(yr => {
     const tx = xScale(yr);
     svg.append('line')
       .attr('x1', tx).attr('y1', areaBottom).attr('x2', tx).attr('y2', areaBottom + 6)
@@ -121,7 +128,7 @@ module.exports = function () {
 
   // ── 5. TIMELINE BAR AND ARROW ─────────────────────────────────────────────
 
-  const tlX1 = xScale(1945), tlX2 = xScale(2028);
+  const tlX1 = xScale(1843), tlX2 = xScale(2026);
   svg.append('line')
     .attr('x1', tlX1).attr('y1', timelineY).attr('x2', tlX2).attr('y2', timelineY)
     .attr('stroke', S.GRAY_MID).attr('stroke-width', 2.5);
@@ -139,41 +146,53 @@ module.exports = function () {
       .attr('fill', isRecent ? S.RED_DARK : S.RED);
   });
 
-  // ── 7. CONNECTING STEMS (label text → timeline dot) ───────────────────────
+  // ── 7 & 8. EVENT LABELS — 45° rotated, left side anchored to stem ──────────
+  // A vertical stem rises from each dot to a level-dependent height.
+  // The label is anchored (text-anchor="start") at the stem top and rotates
+  // -45° so text flows upper-right.  Because all labels go in the same
+  // direction, two parallel 45° lines with different starting heights can
+  // never intersect — the level system guarantees zero overlap.
+
+  const STEM_H = { 1: 27, 2: 55, 3: 75 };  // stem height above timeline per level
 
   events.forEach(ev => {
-    const cx = xScale(ev.year);
-    const labelCY = levelY[ev.lv];
-    svg.append('line')
-      .attr('x1', cx).attr('y1', labelCY + 20)
-      .attr('x2', cx).attr('y2', timelineY - 8)
-      .attr('stroke', S.GRAY_MID).attr('stroke-width', 1)
-      .attr('stroke-dasharray', '3,3');
-  });
+    const cx      = xScale(ev.year);
+    const stemH   = STEM_H[ev.lv] || STEM_H[1];
+    const stemTop = timelineY - stemH;
 
-  // ── 8. EVENT LABEL TEXTS (above timeline bar) ─────────────────────────────
+    // Vertical stem from dot up to anchor
+    if (stemH > 14) {
+      svg.append('line')
+        .attr('x1', cx).attr('y1', timelineY - 8)
+        .attr('x2', cx).attr('y2', stemTop)
+        .attr('stroke', S.GRAY_MID).attr('stroke-width', 1)
+        .attr('stroke-dasharray', '3,3');
+    }
 
-  events.forEach(ev => {
-    const cx = xScale(ev.year);
-    const labelCY = levelY[ev.lv];
+    // Rotated label: left side of text anchored at stem top
+    const g = svg.append('g')
+      .attr('transform', `rotate(-45, ${cx}, ${stemTop})`);
 
-    // Title text — mark as intentional pair when a sub label exists
-    const titleEl = svg.append('text')
-      .attr('x', cx).attr('y', labelCY - 7)
-      .attr('text-anchor', 'middle')
-      .attr('font-family', S.FONT).attr('font-size', FONT_EVENT_TITLE).attr('font-weight', 700)
+    const textEl = g.append('text')
+      .attr('x', cx).attr('y', stemTop)
+      .attr('text-anchor', 'start')
+      .attr('font-family', S.FONT)
+      .attr('data-skip-check', '1');
+
+    textEl.append('tspan')
+      .attr('font-size', FONT_EVENT_TITLE).attr('font-weight', 700)
       .attr('fill', S.TEXT)
       .text(ev.title);
-    if (ev.sub) titleEl.attr('data-skip-check', '1');
 
     if (ev.sub) {
-      svg.append('text')
-        .attr('x', cx).attr('y', labelCY + 15)
-        .attr('text-anchor', 'middle')
-        .attr('font-family', S.FONT).attr('font-size', FONT_EVENT_SUB).attr('font-style', 'italic')
-        .attr('fill', S.TEXT_LIGHT)
-        .attr('data-skip-check', '1')
-        .text(ev.sub);
+      const subTspan = textEl.append('tspan')
+        .attr('font-size', FONT_EVENT_SUB).attr('font-weight', 300)
+        .attr('fill', S.TEXT_LIGHT);
+      if (ev.lines === 2) {
+        subTspan.attr('x', cx).attr('dx', 8).attr('dy', FONT_EVENT_TITLE + 2).text(ev.sub);
+      } else {
+        subTspan.text('  ' + ev.sub);
+      }
     }
   });
 
@@ -188,14 +207,14 @@ module.exports = function () {
     .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_BAND_VERT).attr('font-weight', 700)
     .attr('fill', '#2E86C1')
-    .text('Simb\u00F3lico');
+    .text(misc.band_symbolic);
 
   svg.append('text')
     .attr('transform', 'translate(22, 565) rotate(-90)')
     .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_BAND_VERT).attr('font-weight', 700)
     .attr('fill', '#D68910')
-    .text('Conexionismo');
+    .text(misc.band_connectionist);
 
   // ── 10. LEGEND ─────────────────────────────────────────────────────────────
 
@@ -203,14 +222,14 @@ module.exports = function () {
     .attr('fill', '#F39C12').attr('fill-opacity', 0.80);
   svg.append('text').attr('x', LEGEND_X + 26).attr('y', LEGEND_Y + 8).attr('dominant-baseline', 'middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_LEGEND).attr('fill', S.TEXT)
-    .text('Conexionismo / Bottom-up (redes neuronales)');
+    .text(misc.legend_connectionist);
 
   const blueX = LEGEND_X + 490;
   svg.append('rect').attr('x', blueX).attr('y', LEGEND_Y).attr('width', 20).attr('height', 16)
     .attr('fill', '#85C1E9').attr('fill-opacity', 0.80);
   svg.append('text').attr('x', blueX + 26).attr('y', LEGEND_Y + 8).attr('dominant-baseline', 'middle')
     .attr('font-family', S.FONT).attr('font-size', FONT_LEGEND).attr('fill', S.TEXT)
-    .text('Simb\u00F3lico / Top-down (reglas y l\u00F3gica)');
+    .text(misc.legend_symbolic);
 
   return document.body.innerHTML;
 };

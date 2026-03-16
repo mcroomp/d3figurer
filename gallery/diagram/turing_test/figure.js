@@ -1,8 +1,3 @@
-'use strict';
-const { makeSVG, addMarker, addText, addIcon } = require('../../shared/helpers.js');
-const d3 = require('d3');
-const S = require('../../shared/styles.js');
-
 // Material Design Icons paths (Apache 2.0 license)
 const MDI = {
   monitor: 'M20,17H4V5H20M20,3H4C2.89,3 2,3.89 2,5V17A2,2 0 0,0 4,19H10V21H8V23H16V21H14V19H20A2,2 0 0,0 22,17V5C22,3.89 21.11,3 20,3Z',
@@ -11,7 +6,7 @@ const MDI = {
   file: 'M13,9H18.5L13,3.5V9M6,2H14L20,8V20A2,2 0 0,0 18,22H6C4.89,22 4,21.1 4,20V4C4,2.89 4.89,2 6,2M15,18V16H6V18H15M18,14V12H6V14H18Z',
 };
 
-module.exports = function () {
+globalThis.__d3fig_figure = function({ data, S, d3, assets }) {
   // ── Layout ──────────────────────────────────────────────────────────────
   // Adjust these to reposition/resize elements without reading render code.
   const W = 900, H = 620;                   // canvas size (SVG pixels)
@@ -68,6 +63,8 @@ module.exports = function () {
   const EVAL_CAPTION_Y = 578;            // y of the question caption below evaluator
   // ────────────────────────────────────────────────────────────────────────
 
+  const { misc } = data;
+
   const { svg, document } = makeSVG(W, H);
 
   const defs = svg.append('defs');
@@ -82,12 +79,12 @@ module.exports = function () {
     .attr('stroke', S.GRAY_MID)
     .attr('stroke-width', 1.5);
 
-  addText(svg, BOX_A_CX, LABEL_Y, 'A \u2014 Computadora', LABEL_FONT, 700, S.TEXT, 'middle', false);
+  addText(svg, BOX_A_CX, LABEL_Y, misc.boxA_label, LABEL_FONT, 700, S.TEXT, 'middle', false);
 
   addIcon(svg, MDI.monitor, BOX_A_CX, MONITOR_CY, ICON_MAIN_SIZE, S.GRAY_DARK);
   addIcon(svg, MDI.keyboard, BOX_A_CX, KEYBOARD_CY, ICON_KB_SIZE, S.GRAY_MID);
 
-  addText(svg, BOX_A_CX, CAPTION_A_Y, 'responde en texto', 19, 400, S.GRAY, 'middle', true);
+  addText(svg, BOX_A_CX, CAPTION_A_Y, misc.caption_responds, 19, 400, S.GRAY, 'middle', true);
 
   // ── B — PERSONA BOX (top-right) ─────────────────────────────────────────────
   svg.append('rect')
@@ -98,15 +95,15 @@ module.exports = function () {
     .attr('stroke', S.RED_LIGHT)
     .attr('stroke-width', 1.5);
 
-  addText(svg, BOX_B_CX, LABEL_Y, 'B \u2014 Persona', LABEL_FONT, 700, S.TEXT, 'middle', false);
+  addText(svg, BOX_B_CX, LABEL_Y, misc.boxB_label, LABEL_FONT, 700, S.TEXT, 'middle', false);
 
   addIcon(svg, MDI.person, BOX_B_CX, PERSON_CY, ICON_MAIN_SIZE, S.GRAY_DARK);
   addIcon(svg, MDI.keyboard, BOX_B_CX, KEYBOARD_B_CY, ICON_KB_SIZE, S.GRAY_MID);
 
-  addText(svg, BOX_B_CX, CAPTION_B_Y, 'responde en texto', 19, 400, S.GRAY, 'middle', true);
+  addText(svg, BOX_B_CX, CAPTION_B_Y, misc.caption_responds, 19, 400, S.GRAY, 'middle', true);
 
   // ── CENTER PAPER / TEXT BOX ──────────────────────────────────────────────────
-  addText(svg, PAPER_CX, PAPER_CHANNEL_Y, 'Solo texto \u2014 sin identidad', 20, 400, S.GRAY, 'middle', true);
+  addText(svg, PAPER_CX, PAPER_CHANNEL_Y, misc.channel_label, 20, 400, S.GRAY, 'middle', true);
 
   svg.append('rect')
     .attr('x', PAPER_X).attr('y', PAPER_Y)
@@ -158,9 +155,9 @@ module.exports = function () {
     .attr('fill', S.RED)
     .text('?');
 
-  addText(svg, PAPER_CX, EVAL_LABEL_Y, 'C \u2014 Evaluador', 25, 700, S.TEXT, 'middle', false);
+  addText(svg, PAPER_CX, EVAL_LABEL_Y, misc.boxC_label, 25, 700, S.TEXT, 'middle', false);
 
-  addText(svg, PAPER_CX, EVAL_CAPTION_Y, '\u00BFCu\u00E1l respuesta proviene de la m\u00E1quina?', 21, 400, S.GRAY, 'middle', true);
+  addText(svg, PAPER_CX, EVAL_CAPTION_Y, misc.eval_question, 21, 400, S.GRAY, 'middle', true);
 
   return document.body.innerHTML;
 };

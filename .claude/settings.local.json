@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(NODE_PATH=$HOME/.d3figurer/node_modules node --test tests/test-checker.js 2>&1 | tail -50)",
+      "Bash(grep:*)",
+      "Bash(git:*)",
+      "Bash(NODE_PATH=$HOME/.d3figurer/node_modules node --test --test-reporter=spec tests/test-checker.js tests/test-client.js tests/test-server-internals.js tests/test-mcp-server.js 2>&1 | tail -30)",
+      "Bash(npm test:*)",
+      "Bash(wc:*)",
+      "Bash(./server.sh status:*)",
+      "Bash(./server.sh start:*)",
+      "Bash(NODE_PATH=/home/krist/.aibook-build/node_modules ./server.sh start --src-dir /mnt/c/repos/d3figurer/gallery 2>&1)",
+      "Bash(ln:*)",
+      "Bash(chmod:*)",
+      "Bash(./dev.sh start:*)",
+      "Bash(curl -s -X POST http://127.0.0.1:9229/render -H \"Content-Type: application/json\" -d '{\"\"figure\"\":\"\"diagram/transformer\"\",\"\"outputPath\"\":\"\"/tmp/transformer.svg\"\",\"\"format\"\":\"\"svg\"\"}')",
+      "Read(//tmp/**)",
+      "Bash(PUPPETEER_SKIP_DOWNLOAD=true ./dev.sh test 2>&1 | tail -8)",
+      "Bash(./dev.sh status:*)",
+      "Bash(PUPPETEER_SKIP_DOWNLOAD=true ./dev.sh test 2>&1 | tail -5)"
+    ]
+  }
+}

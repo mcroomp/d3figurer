@@ -3,7 +3,7 @@
 // Chapter gray: RGB(120, 120, 120) #787878
 // Gray boxes: RGB(225, 225, 225)  #e1e1e1
 
-export default {
+const S = {
   RED:        '#e4003b',  // Primary book red RGB(228,0,59)
   RED_LIGHT:  '#f08090',  // Light red — projections, secondary elements
   RED_DARK:   '#b80030',  // Darker red — emphasis
@@ -32,3 +32,6 @@ export default {
     );
   },
 };
+
+globalThis.__d3fig_styles = S;
+export default S;
