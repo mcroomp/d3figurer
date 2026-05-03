@@ -132,6 +132,7 @@ case "$cmd" in
     fi
 
     mkdir -p "$RUN_DIR"
+    mkdir -p "$(dirname "$ENV_FILE")"
 
     # Persist environment so restart/stop work without re-supplying args
     { echo "NODE_PATH=${NODE_PATH:-}"; echo "SRC_DIR=${SRC_DIR:-}"; } > "$ENV_FILE"
